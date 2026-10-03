@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, asc, desc, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
-import { db, leads, milestones, projects, siteUpdates, visits } from "@/db";
+import { db, designs, leads, milestones, projects, siteUpdates, visits } from "@/db";
 import { officeScope, requireUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { date, dateTime, money } from "@/lib/format";
@@ -24,7 +24,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   });
   const projectIds = scopedProjects.map((p) => p.id);
 
-  const [followUps, pipeline, dueMilestones, upcomingVisits, recentUpdates] = await Promise.all([
+  const [followUps, pipeline, dueMilestones, upcomingVisits, recentUpdates, clientResponses] = await Promise.all([
     can(user.role, "leads")
       ? db.query.leads.findMany({
           where: and(scope ? eq(leads.officeId, scope) : undefined, lte(leads.nextFollowUpAt, endOfToday), inArray(leads.status, ["NEW", "CONTACTED", "SITE_VISIT", "DESIGN", "QUOTED"])),
@@ -58,6 +58,14 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           with: { project: true, author: true },
           orderBy: desc(siteUpdates.createdAt),
           limit: 6,
+        })
+      : Promise.resolve([]),
+    can(user.role, "design") && projectIds.length
+      ? db.query.designs.findMany({
+          where: and(inArray(designs.projectId, projectIds), inArray(designs.status, ["APPROVED", "CHANGES_REQUESTED"]), gte(designs.decidedAt, new Date(Date.now() - 7 * 86400000))),
+          with: { project: true },
+          orderBy: desc(designs.decidedAt),
+          limit: 8,
         })
       : Promise.resolve([]),
   ]);
@@ -132,6 +140,26 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       <p className="text-xs text-muted">{m.label}</p>
                     </div>
                     <span className="text-sm font-semibold">{money(m.amount, m.project.office.currency)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
+        {clientResponses.length > 0 && (
+          <Section title="Client design responses (7 days)">
+            <ul className="divide-y divide-line">
+              {clientResponses.map((d) => (
+                <li key={d.id}>
+                  <Link href={`/projects/${d.projectId}/designs`} className="block py-2.5 hover:text-brass">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold">
+                        {d.project.name} · {d.title}
+                      </p>
+                      <Badge tone={d.status === "APPROVED" ? "olive" : "clay"}>{d.status === "APPROVED" ? "Approved" : "Changes"}</Badge>
+                    </div>
+                    {d.clientComment && <p className="text-xs text-muted">&ldquo;{d.clientComment}&rdquo;</p>}
                   </Link>
                 </li>
               ))}

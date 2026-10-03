@@ -5,6 +5,9 @@ import { date, dateInput, dateTime, titleCase } from "@/lib/format";
 import { Badge, Empty, ProgressBar, Section, StatusBadge } from "@/components/ui";
 import { loadProject } from "../data";
 import { addVisit, deleteVisit, updateProject, updateStage } from "../actions";
+import { disablePortal, enablePortal } from "../design-actions";
+import { CopyButton } from "@/components/copy-button";
+import { appBaseUrl, portalPath } from "@/lib/portal";
 
 export default async function ProjectOverview({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,6 +23,7 @@ export default async function ProjectOverview({ params }: { params: Promise<{ id
         .orderBy(asc(users.name))
     : [];
   const upcoming = project.visits.filter((v) => v.at >= new Date(Date.now() - 86400000));
+  const portalUrl = project.client.portalToken ? `${await appBaseUrl()}${portalPath(project.client.portalToken)}` : null;
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
@@ -118,6 +122,45 @@ export default async function ProjectOverview({ params }: { params: Promise<{ id
           {project.client.email && <p className="text-sm text-muted">{project.client.email}</p>}
           {project.siteAddress && <p className="mt-2 text-sm text-muted">{project.siteAddress}</p>}
           <p className="mt-2 text-xs text-muted">Project manager: {project.manager?.name ?? "—"}</p>
+          <div className="mt-4 border-t border-line pt-3">
+            <p className="label">Client portal</p>
+            {project.client.portalToken ? (
+              <>
+                <p className="break-all text-xs text-muted">{portalUrl}</p>
+                <p className="mt-1 text-xs text-muted">Last opened: {project.client.portalLastSeenAt ? dateTime(project.client.portalLastSeenAt) : "not yet"}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <CopyButton text={portalUrl!} />
+                  <a
+                    href={`https://wa.me/${project.client.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Hi ${project.client.name.split(" ")[0]}, you can follow your project's progress, approve designs and see invoices here: ${portalUrl}`)}`}
+                    target="_blank"
+                    className="btn-ghost px-3 py-1.5 text-xs"
+                  >
+                    Send on WhatsApp
+                  </a>
+                  {editProject && (
+                    <>
+                      <form action={enablePortal}>
+                        <input type="hidden" name="projectId" value={project.id} />
+                        <button className="btn-ghost px-3 py-1.5 text-xs" title="Old link stops working">New link</button>
+                      </form>
+                      <form action={disablePortal}>
+                        <input type="hidden" name="projectId" value={project.id} />
+                        <button className="btn-ghost px-3 py-1.5 text-xs text-clay">Turn off</button>
+                      </form>
+                    </>
+                  )}
+                </div>
+              </>
+            ) : editProject ? (
+              <form action={enablePortal}>
+                <input type="hidden" name="projectId" value={project.id} />
+                <p className="mb-2 text-xs text-muted">Gives the client a private link to see progress, approve designs and download invoices.</p>
+                <button className="btn-brass px-3 py-1.5 text-xs">Turn on client portal</button>
+              </form>
+            ) : (
+              <p className="text-xs text-muted">Not turned on.</p>
+            )}
+          </div>
         </Section>
 
         <Section title="Site visits & meetings">

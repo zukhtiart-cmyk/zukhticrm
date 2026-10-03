@@ -140,7 +140,7 @@ export async function applyVoiceUpdate(user: { id: string; role: Role; officeId:
   if (data.sendToClient && data.clientMessage.trim()) {
     sendStatus = await sendClientUpdate(
       project.client.phone,
-      data.clientMessage.trim(),
+      data.clientMessage.trim() + (project.client.portalToken ? `\n\nPhotos and progress: ${appUrl}/portal/${project.client.portalToken}` : ""),
       data.photos.filter((p) => p.clientVisible).map((p) => p.url),
       appUrl,
     );

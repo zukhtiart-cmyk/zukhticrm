@@ -4,7 +4,7 @@ Team workspace for Zukhti Home, a turnkey interior design company. It covers lea
 
 Built with Next.js 15, Postgres (Drizzle ORM) and Tailwind. It's designed to run on Vercel.
 
-## What's in this version (Phase 1 + voice desk)
+## What's in this version (Phases 1–2)
 
 | Area | What it does |
 | --- | --- |
@@ -18,6 +18,9 @@ Built with Next.js 15, Postgres (Drizzle ORM) and Tailwind. It's designed to run
 | **Orders** | Track items from ordered → in production → shipped → customs → delivered, with ETA. |
 | **Rate library** | Standard cost and sell rates per item. |
 | **Voice desk** | See below. |
+| **Designs** | Upload renders or PDF drawings per room. Uploading the same room and title again saves a new version. Keep a design as an internal draft or share it for client approval, and see the client's decision and comments. |
+| **Invoices** | Issue numbered invoices from payment milestones, numbered per office and year, e.g. `MUM-2026-0007`. Each invoice is printable and shows the taxable value and GST or VAT separately. |
+| **Client portal** | See below. |
 
 ### Voice update desk (`/voice`)
 
@@ -30,6 +33,20 @@ Built with Next.js 15, Postgres (Drizzle ORM) and Tailwind. It's designed to run
 
 Without AI keys, the desk runs in **basic mode**: typed updates work, and stage percentages are picked up from keywords.
 
+### Client portal (`/portal/…`)
+
+Each client gets a private link with no password. Turn it on from **Project → Overview → Client portal**, then copy it or send it on WhatsApp. **New link** replaces the old one, and **Turn off** disables it.
+
+On the portal, the client sees:
+- overall progress, stages and expected handover
+- upcoming visits
+- site updates and the photos that were shared with them
+- designs, which they can **approve** or **request changes** on
+- the payment schedule, with paid and next-due amounts
+- quotes, which they can accept, and invoices to download
+
+The portal never shows costs, margins, vendor names, internal notes, issues or draft designs. Updates sent from the voice desk include the portal link when the portal is on. Design responses show up on the team's **Today** page.
+
 ## Set up and deploy on Vercel
 
 1. **Import the repo** in Vercel (New Project → this repo). Framework: Next.js.
@@ -40,6 +57,7 @@ Without AI keys, the desk runs in **basic mode**: typed updates work, and stage 
    - `OPENAI_API_KEY`: speech-to-text for voice notes
    - `ANTHROPIC_API_KEY`: understanding updates and writing client messages (`ANTHROPIC_MODEL` defaults to `claude-sonnet-5-5`)
    - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`: optional for now; client updates are saved as *queued* until these are set
+   - `APP_URL`: optional, your live address (e.g. `https://crm.zukhtihome.com`) used in portal links; otherwise taken from the request
 5. **Deploy.** Database tables are created automatically on each deploy (`vercel-build` runs the migrations).
 6. **Create the owner login** once, from your computer, with the production `DATABASE_URL` in `.env`:
    ```bash
@@ -63,11 +81,12 @@ Don't run `db:seed` on the live database, because the demo logins share a known 
 ## Notes
 
 - **WhatsApp:** free-form messages only reach clients who have messaged your business number in the last 24 hours. Outside that window, WhatsApp requires a pre-approved template. Templates and the client auto-reply assistant are Phase 3.
-- **Voice notes and photos** are stored in Vercel Blob with unguessable links. Anyone with the link can open the file.
+- **Voice notes, photos and design files** are stored in Vercel Blob with unguessable links. Anyone with the link can open the file.
+- **Portal links** work like a private link: anyone who has the link can see that client's projects. Use **New link** if one is shared by mistake.
 - **Schema changes:** edit `src/db/schema.ts`, run `npm run db:generate`, and commit the new file in `drizzle/`.
 
 ## Not built yet
 
 - WhatsApp auto-reply assistant for client questions (Phase 3)
 - Offline recording on weak site signal, and GPS-based project suggestion on the voice desk
-- Client portal, procurement vendor database, multi-currency conversion, AI BOQ drafting (Phase 4)
+- Procurement vendor database, multi-currency conversion, AI BOQ drafting (Phase 4)

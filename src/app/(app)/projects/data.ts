@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import { boqItems, db, milestones, orders, photos, projects, quotes, siteUpdates, stages, visits } from "@/db";
+import { boqItems, db, designs, milestones, orders, photos, projects, quotes, siteUpdates, stages, visits } from "@/db";
 import { officeScope, requireUser } from "@/lib/auth";
 import type { Capability } from "@/lib/permissions";
 
@@ -22,6 +22,7 @@ export async function loadProject(id: string, capability: Capability = "projects
       milestones: { orderBy: asc(milestones.sortOrder), with: { dueStage: true } },
       orders: { orderBy: desc(orders.updatedAt) },
       visits: { orderBy: asc(visits.at) },
+      designs: { orderBy: [asc(designs.room), asc(designs.title), desc(designs.version)], with: { uploadedBy: true } },
     },
   });
   if (!project) notFound();
@@ -36,7 +37,7 @@ export async function assertProjectAccess(id: string, capability: Capability) {
   const scope = officeScope(user);
   const project = await db.query.projects.findFirst({
     where: scope ? and(eq(projects.id, id), eq(projects.officeId, scope)) : eq(projects.id, id),
-    with: { office: true },
+    with: { office: true, client: true },
   });
   if (!project) throw new Error("Project not found");
   return { user, project };

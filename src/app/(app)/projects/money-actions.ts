@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, like, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { boqItems, db, milestones, quotes, quoteStatusEnum, rateItems, type QuoteLine } from "@/db";
@@ -137,18 +137,39 @@ export async function recordPayment(form: FormData) {
   done(project.id);
 }
 
-export async function markInvoiced(form: FormData) {
+/** Issues a numbered invoice for a milestone, e.g. MUM-2026-0007. Works for paid milestones too (as a receipt). */
+export async function createInvoice(form: FormData) {
   const { project } = await assertProjectAccess(String(form.get("projectId")), "payments");
   const id = String(form.get("id"));
-  await db.update(milestones).set({ status: "INVOICED" }).where(and(eq(milestones.id, id), eq(milestones.projectId, project.id)));
+  const m = await db.query.milestones.findFirst({ where: and(eq(milestones.id, id), eq(milestones.projectId, project.id)) });
+  if (!m || m.invoiceNumber) return;
+  const prefix = `${project.office.city.slice(0, 3).toUpperCase()}-${new Date().getFullYear()}-`;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const [{ n }] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(milestones)
+      .where(like(milestones.invoiceNumber, `${prefix}%`));
+    const invoiceNumber = `${prefix}${String(n + 1 + attempt).padStart(4, "0")}`;
+    try {
+      await db
+        .update(milestones)
+        .set({ invoiceNumber, invoicedAt: new Date(), status: m.status === "PAID" ? "PAID" : "INVOICED" })
+        .where(eq(milestones.id, m.id));
+      break;
+    } catch {
+      // Number taken by a parallel invoice; try the next one.
+    }
+  }
   done(project.id);
 }
 
 export async function undoPayment(form: FormData) {
   const { project } = await assertProjectAccess(String(form.get("projectId")), "payments");
+  const m0 = await db.query.milestones.findFirst({ where: and(eq(milestones.id, String(form.get("id"))), eq(milestones.projectId, project.id)) });
+  const m0Status = m0?.invoiceNumber ? ("INVOICED" as const) : ("PENDING" as const);
   await db
     .update(milestones)
-    .set({ status: "PENDING", paidAmount: null, paidAt: null, reference: null })
+    .set({ status: m0Status, paidAmount: null, paidAt: null, reference: null })
     .where(and(eq(milestones.id, String(form.get("id"))), eq(milestones.projectId, project.id)));
   await syncMilestoneAmounts(db, project.id, project.office.taxRate);
   done(project.id);

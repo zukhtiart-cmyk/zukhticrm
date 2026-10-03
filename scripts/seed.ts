@@ -5,7 +5,7 @@
  */
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { db, clients, leads, leadActivities, offices, orders, projects, rateItems, siteUpdates, stages, users, visits, boqItems, milestones } from "../src/db";
+import { db, clients, designs, leads, leadActivities, offices, orders, projects, rateItems, siteUpdates, stages, users, visits, boqItems, milestones } from "../src/db";
 import { createProjectWithDefaults, recomputeProjectProgress, syncMilestoneAmounts } from "../src/lib/projects";
 
 const PASSWORD = "zukhti123";
@@ -117,8 +117,18 @@ async function main() {
   await syncMilestoneAmounts(db, project.id, 18);
   const ms = await db.select().from(milestones).where(eq(milestones.projectId, project.id));
   for (const m of ms.filter((m) => m.sortOrder < 3)) {
-    await db.update(milestones).set({ status: "PAID", paidAmount: m.amount, paidAt: days(-40 + m.sortOrder * 10), reference: "NEFT" }).where(eq(milestones.id, m.id));
+    await db
+      .update(milestones)
+      .set({ status: "PAID", paidAmount: m.amount, paidAt: days(-40 + m.sortOrder * 10), reference: "NEFT", invoiceNumber: `MUM-${new Date().getFullYear()}-000${m.sortOrder + 1}`, invoicedAt: days(-42 + m.sortOrder * 10) })
+      .where(eq(milestones.id, m.id));
   }
+  await db.update(clients).set({ portalToken: "demo-shah-portal-link-0123456789" }).where(eq(clients.id, shah.id));
+  const render = "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=1200&q=80";
+  await db.insert(designs).values([
+    { projectId: project.id, room: "Living", title: "TV wall — 3D view", version: 1, fileUrl: render, fileType: "image", status: "CHANGES_REQUESTED", clientComment: "Can the fluted panel be darker?", decidedAt: days(-20), sharedAt: days(-22), uploadedById: designer.id, createdAt: days(-22) },
+    { projectId: project.id, room: "Living", title: "TV wall — 3D view", version: 2, fileUrl: render, fileType: "image", notes: "Darker walnut fluting as requested", status: "PENDING", sharedAt: days(-1), uploadedById: designer.id, createdAt: days(-1) },
+    { projectId: project.id, room: "Kitchen", title: "Kitchen elevation", version: 1, fileUrl: render, fileType: "image", status: "APPROVED", decidedAt: days(-30), sharedAt: days(-32), uploadedById: designer.id, createdAt: days(-32) },
+  ]);
 
   await db.insert(orders).values([
     { projectId: project.id, item: "3-seater sofa", vendor: "Foshan Living Co.", status: "SHIPPED", eta: days(17) },
@@ -126,7 +136,7 @@ async function main() {
   ]);
   await db.insert(visits).values({ projectId: project.id, title: "Client walkthrough — carpentry", at: days(3) });
   await db.insert(siteUpdates).values([
-    { projectId: project.id, stageId: byName("False ceiling").id, authorId: supervisor.id, summary: "False ceiling completed in all rooms, cove lights wired.", sentToClient: true, sendStatus: "demo", createdAt: days(-10) },
+    { projectId: project.id, stageId: byName("False ceiling").id, authorId: supervisor.id, summary: "False ceiling completed in all rooms, cove lights wired.", clientMessage: "Hi Arjun, the false ceiling is now complete in all rooms and the cove lights are wired. Carpentry starts this week!", sentToClient: true, sendStatus: "demo", createdAt: days(-10) },
     { projectId: project.id, stageId: byName("Carpentry").id, authorId: supervisor.id, summary: "Kitchen and wardrobe carcasses installed; laminate work starts Monday.", issues: "Hinges for kids wardrobe pending from vendor", createdAt: days(-1) },
   ]);
 

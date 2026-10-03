@@ -26,11 +26,13 @@ export const milestoneStatusEnum = pgEnum("milestone_status", ["PENDING", "INVOI
 export const orderStatusEnum = pgEnum("order_status", ["ORDERED", "IN_PRODUCTION", "SHIPPED", "CUSTOMS", "DELIVERED"]);
 export const quoteStatusEnum = pgEnum("quote_status", ["DRAFT", "SENT", "ACCEPTED"]);
 export const updateSourceEnum = pgEnum("update_source", ["VOICE", "MANUAL"]);
+export const designStatusEnum = pgEnum("design_status", ["DRAFT", "PENDING", "APPROVED", "CHANGES_REQUESTED"]);
 
 export type Role = (typeof roleEnum.enumValues)[number];
 export type LeadStatus = (typeof leadStatusEnum.enumValues)[number];
 export type StageStatus = (typeof stageStatusEnum.enumValues)[number];
 export type OrderStatus = (typeof orderStatusEnum.enumValues)[number];
+export type DesignStatus = (typeof designStatusEnum.enumValues)[number];
 
 export const offices = pgTable("offices", {
   id: id(),
@@ -63,6 +65,9 @@ export const clients = pgTable("clients", {
   officeId: text("office_id")
     .notNull()
     .references(() => offices.id),
+  /** Secret part of the client's portal link; null = portal not enabled. */
+  portalToken: text("portal_token").unique(),
+  portalLastSeenAt: timestamp("portal_last_seen_at", { withTimezone: true }),
   createdAt: created(),
 });
 
@@ -229,6 +234,8 @@ export const milestones = pgTable("payment_milestones", {
   paidAmount: money("paid_amount"),
   paidAt: timestamp("paid_at", { withTimezone: true }),
   reference: text("reference"),
+  invoiceNumber: text("invoice_number").unique(),
+  invoicedAt: timestamp("invoiced_at", { withTimezone: true }),
   sortOrder: integer("sort_order").notNull().default(0),
 });
 
@@ -256,6 +263,26 @@ export const visits = pgTable("site_visits", {
   title: text("title").notNull(),
   at: timestamp("at", { withTimezone: true }).notNull(),
   notes: text("notes"),
+});
+
+export const designs = pgTable("designs", {
+  id: id(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  room: text("room").notNull(),
+  title: text("title").notNull(),
+  version: integer("version").notNull().default(1),
+  fileUrl: text("file_url").notNull(),
+  fileType: text("file_type").notNull(),
+  notes: text("notes"),
+  /** DRAFT = internal only; PENDING = shared, waiting for the client. */
+  status: designStatusEnum("status").notNull().default("DRAFT"),
+  clientComment: text("client_comment"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  sharedAt: timestamp("shared_at", { withTimezone: true }),
+  uploadedById: text("uploaded_by_id").references(() => users.id),
+  createdAt: created(),
 });
 
 // Relations
@@ -287,6 +314,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   milestones: many(milestones),
   orders: many(orders),
   visits: many(visits),
+  designs: many(designs),
 }));
 export const stagesRelations = relations(stages, ({ one }) => ({ project: one(projects, { fields: [stages.projectId], references: [projects.id] }) }));
 export const siteUpdatesRelations = relations(siteUpdates, ({ one, many }) => ({
@@ -307,3 +335,7 @@ export const milestonesRelations = relations(milestones, ({ one }) => ({
 }));
 export const ordersRelations = relations(orders, ({ one }) => ({ project: one(projects, { fields: [orders.projectId], references: [projects.id] }) }));
 export const visitsRelations = relations(visits, ({ one }) => ({ project: one(projects, { fields: [visits.projectId], references: [projects.id] }) }));
+export const designsRelations = relations(designs, ({ one }) => ({
+  project: one(projects, { fields: [designs.projectId], references: [projects.id] }),
+  uploadedBy: one(users, { fields: [designs.uploadedById], references: [users.id] }),
+}));

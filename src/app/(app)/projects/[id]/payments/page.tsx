@@ -1,12 +1,15 @@
+import { notFound } from "next/navigation";
 import { can } from "@/lib/permissions";
 import { date, dateInput, money, round2 } from "@/lib/format";
 import { Empty, Section, StatusBadge } from "@/components/ui";
 import { loadProject } from "../../data";
-import { addMilestone, markInvoiced, recordPayment, undoPayment, updateMilestone } from "../../money-actions";
+import Link from "next/link";
+import { addMilestone, createInvoice, recordPayment, undoPayment, updateMilestone } from "../../money-actions";
 
 export default async function PaymentsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user, project } = await loadProject(id);
+  if (!can(user.role, "payments") && !can(user.role, "boq")) notFound();
   const edit = can(user.role, "payments");
   const cur = project.office.currency;
   const contract = round2(project.boqItems.reduce((a, i) => a + i.qty * i.unitPrice, 0) * (1 + project.office.taxRate / 100));
@@ -52,6 +55,22 @@ export default async function PaymentsPage({ params }: { params: Promise<{ id: s
                   <StatusBadge status={m.status} />
                 </div>
               </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {m.invoiceNumber ? (
+                  <Link href={`/projects/${project.id}/invoice/${m.id}`} className="btn-ghost px-3 py-1.5 text-xs">
+                    Invoice {m.invoiceNumber}
+                  </Link>
+                ) : (
+                  edit &&
+                  m.amount > 0 && (
+                    <form action={createInvoice}>
+                      <input type="hidden" name="projectId" value={project.id} />
+                      <input type="hidden" name="id" value={m.id} />
+                      <button className="btn-ghost px-3 py-1.5 text-xs">{m.status === "PAID" ? "Create receipt invoice" : "Create invoice"}</button>
+                    </form>
+                  )
+                )}
+              </div>
               {edit && (
                 <details className="mt-2">
                   <summary className="cursor-pointer text-xs font-semibold text-brass">{m.status === "PAID" ? "Edit" : "Record payment / edit"}</summary>
@@ -74,11 +93,6 @@ export default async function PaymentsPage({ params }: { params: Promise<{ id: s
                         </div>
                         <div className="flex gap-2">
                           <button className="btn-primary">Mark paid</button>
-                          {m.status === "PENDING" && (
-                            <button formAction={markInvoiced} className="btn-ghost">
-                              Invoiced
-                            </button>
-                          )}
                         </div>
                       </form>
                     ) : (

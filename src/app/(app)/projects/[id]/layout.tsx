@@ -10,6 +10,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
   const { user, project } = await loadProject(id);
   const tabs = [
     { slug: "", label: "Overview" },
+    { slug: "designs", label: "Designs" },
     ...(can(user.role, "boq") ? [{ slug: "boq", label: "BOQ & quotes" }] : []),
     ...(can(user.role, "payments") || can(user.role, "boq") ? [{ slug: "payments", label: "Payments" }] : []),
     { slug: "orders", label: "Orders" },
