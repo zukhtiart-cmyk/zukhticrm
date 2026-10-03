@@ -1,0 +1,78 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Cormorant Garamond", ui-serif, Georgia, serif;
+
+  --color-ivory: #f7f4ee;
+  --color-paper: #fffdf9;
+  --color-line: #e7e0d4;
+  --color-ink: #1f1c18;
+  --color-muted: #6f675c;
+  --color-brass: #9a7140;
+  --color-brass-soft: #f1e7d8;
+  --color-olive: #4f6b4a;
+  --color-olive-soft: #e5ece2;
+  --color-clay: #b4553a;
+  --color-clay-soft: #f6e3dc;
+  --color-sky-soft: #e4ebf2;
+  --color-sky: #3d5a78;
+}
+
+html,
+body {
+  background: var(--color-ivory);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+@utility card {
+  @apply rounded-2xl border border-line bg-paper;
+}
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility btn-primary {
+  @apply btn bg-ink text-paper hover:bg-black;
+}
+@utility btn-brass {
+  @apply btn bg-brass text-white hover:brightness-95;
+}
+@utility btn-ghost {
+  @apply btn border border-line bg-paper text-ink hover:bg-ivory;
+}
+@utility btn-danger {
+  @apply btn border border-clay/30 bg-clay-soft text-clay hover:brightness-95;
+}
+@utility input {
+  @apply w-full rounded-xl border border-line bg-paper px-3 py-2.5 text-sm outline-none focus:border-brass focus:ring-2 focus:ring-brass/20;
+}
+@utility label {
+  @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted;
+}
+@utility h-display {
+  @apply font-display font-semibold tracking-tight;
+}
+@utility table-clean {
+  @apply w-full text-sm;
+  & th {
+    @apply border-b border-line px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted;
+  }
+  & td {
+    @apply border-b border-line/70 px-3 py-2.5 align-top;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}
