@@ -16,6 +16,7 @@ export function AiCheck() {
         <div className={`rounded-xl px-3 py-2 text-sm ${res.ok ? "bg-olive-soft text-olive" : "bg-clay-soft text-clay"}`}>
           <p className="font-semibold">{res.ok ? `✓ Claude is working (${res.model})` : `✗ Claude isn't working (${res.model})`}</p>
           <p className="text-xs">Key in use: {res.key}</p>
+          {res.sample && <p className="mt-1 text-xs">{res.sample}</p>}
           {!res.ok && (
             <>
               <p className="mt-1 text-xs">
