@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { roleLabels } from "@/lib/permissions";
 import { Badge, PageHeader, Section } from "@/components/ui";
 import { AddUserForm } from "./add-user-form";
-import { resetPassword, toggleUserActive, updateOffice } from "./actions";
+import { resetPassword, setUserPhone, toggleUserActive, updateOffice } from "./actions";
 import { saveWhatsappSettings } from "../inbox/actions";
 import { getSettings } from "@/lib/settings";
 import { appBaseUrl } from "@/lib/portal";
@@ -55,6 +55,11 @@ export default async function AdminPage() {
                     <td>
                       <p className="font-semibold">{u.name}</p>
                       <p className="text-xs text-muted">{u.email}</p>
+                      <form action={setUserPhone} className="mt-1 flex gap-1">
+                        <input type="hidden" name="id" value={u.id} />
+                        <input name="phone" defaultValue={u.phone ?? ""} placeholder="WhatsApp +91…" className="input w-36 py-1 text-xs" aria-label="Phone" />
+                        <button className="btn-ghost px-2 py-1 text-xs">Save</button>
+                      </form>
                     </td>
                     <td>{roleLabels[u.role]}</td>
                     <td>{u.office?.name ?? "—"}</td>
@@ -102,6 +107,10 @@ export default async function AdminPage() {
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" name="weeklySummary" defaultChecked={wa.weeklySummary} className="h-4 w-4" />
               Send every client a weekly project summary on Saturday morning
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="dailySummary" defaultChecked={wa.dailySummary} className="h-4 w-4" />
+              Send owners and admins (with a phone number on their profile) the evening site summary at 7 pm IST
             </label>
             <div>
               <button className="btn-primary">Save WhatsApp settings</button>

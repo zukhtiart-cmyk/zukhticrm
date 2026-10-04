@@ -4,7 +4,7 @@ Team workspace for Zukhti Home, a turnkey interior design company. It covers lea
 
 Built with Next.js 15, Postgres (Drizzle ORM) and Tailwind. It's designed to run on Vercel.
 
-## What's in this version (Phases 1–3)
+## What's in this version (Phases 1–4)
 
 | Area | What it does |
 | --- | --- |
@@ -16,6 +16,11 @@ Built with Next.js 15, Postgres (Drizzle ORM) and Tailwind. It's designed to run
 | **BOQ & quotes** | Room-by-room BOQ from the rate library or custom items. Shows internal cost and margin. Creates versioned client quotes (print or save as PDF) with tax and payment schedule. |
 | **Payments** | Milestones linked to stages; amounts follow the BOQ total. Mark invoiced or paid, with reference. Shows received vs outstanding. |
 | **Orders** | Track items from ordered → in production → shipped → customs → delivered, with ETA. |
+| **Procurement** (Phase 4) | Vendor list (China, India, UAE) with currency and lead time. Raise numbered purchase orders (`PO-2026-0001`) from BOQ lines in the vendor's currency, print them, and track shipment, container number and port. |
+| **Exchange rates** (Phase 4) | Set on the Rates page. Each PO keeps the rate from the day it was raised. |
+| **True margin** (Phase 4) | The BOQ margin switches from estimated cost to actual PO cost, converted to the project currency, as lines get ordered. |
+| **Owner dashboard** (Phase 4) | Contract value, collected, due now, average margin, open leads, late orders, per-office figures, projects needing attention and the evening site summary. Totals are in INR-equivalent. |
+| **AI helpers** (Phase 4) | *Draft BOQ with AI* from a brief or floor plan (image/PDF), using your rate library; you tick the lines to keep. *Draft a follow-up* on each lead, sent on WhatsApp or opened in your own WhatsApp. An evening site summary at 7 pm IST for owners and admins. |
 | **Rate library** | Standard cost and sell rates per item. |
 | **Voice desk** | See below. |
 | **Designs** | Upload renders or PDF drawings per room. Uploading the same room and title again saves a new version. Keep a design as an internal draft or share it for client approval, and see the client's decision and comments. |
@@ -28,6 +33,9 @@ The Voice Desk is a separate, phone-friendly app with its own sign-in page at **
 
 - **Site supervisors, procurement and accounts** use only the Voice Desk. If they open the CRM, they're sent to the desk.
 - **Owner, admin and designers** keep the full CRM and can open the desk from it.
+- **No signal on site?** Record as usual: the update and photos are kept on the phone and listed as *Saved on this phone*. Tap **Send now** when back online. Open the desk once with signal so it also opens offline.
+- **Nearest site:** tap *Nearest site* to pick the project you're standing at (within 1 km). The first time at a site, tap *Save my current location as the site*.
+- **Procurement** tab (procurement, owner, admin): vendors, purchase orders and shipments.
 - Each role is shown what it records and a snapshot of the project before speaking:
 
 | Role | Records | Sees before speaking |
@@ -113,7 +121,7 @@ How it behaves:
    > Hello {{1}}, here is an update from Zukhti Home: {{2}}
 
    Once it's approved, set `WHATSAPP_TEMPLATE_NAME=project_update` and `WHATSAPP_TEMPLATE_LANG=en`.
-9. Add `CRON_SECRET` (any long random text) for the Saturday summaries, and `APP_URL` (your live address).
+9. Add `CRON_SECRET` (any long random text) for the Saturday client summaries and the 7 pm owner summary, and `APP_URL` (your live address). For the owner summary, add your WhatsApp number under **Team**.
 10. Redeploy. In the CRM, open **Team → WhatsApp assistant**: the checklist should show all ticks.
 11. Test it: message your business number from a phone saved on a client (it needs a project). Then open **WhatsApp** in the CRM to see the draft.
 
@@ -125,7 +133,8 @@ How it behaves:
 4. **Environment variables** (Settings → Environment Variables), see `.env.example`:
    - `AUTH_SECRET`: a long random string (`openssl rand -base64 32`)
    - `OPENAI_API_KEY`: speech-to-text for voice notes
-   - `ANTHROPIC_API_KEY`: understanding updates and writing client messages (`ANTHROPIC_MODEL` defaults to `claude-sonnet-5-5`)
+   - `ANTHROPIC_API_KEY`: understanding updates, client messages, AI BOQ drafts, lead follow-ups and the daily summary (`ANTHROPIC_MODEL` defaults to `claude-sonnet-5-5`). Without it, follow-ups use templates and the summary is a plain list.
+   - `CRON_SECRET`: protects the scheduled jobs (weekly client summary, daily owner summary)
    - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`: optional for now; client updates are saved as *queued* until these are set
    - `APP_URL`: optional, your live address (e.g. `https://crm.zukhtihome.com`) used in portal links; otherwise taken from the request
 5. **Deploy.** Database tables are created automatically on each deploy (`vercel-build` runs the migrations).
@@ -152,7 +161,7 @@ Don't run `db:seed` on the live database, because the demo logins share a known 
 - **Portal links** work like a private link: anyone who has the link can see that client's projects. Use **New link** if one is shared by mistake.
 - **Schema changes:** edit `src/db/schema.ts`, run `npm run db:generate`, and commit the new file in `drizzle/`.
 
-## Not built yet
+## Ideas for later
 
-- Offline recording on weak site signal, and GPS-based project suggestion on the voice desk
-- Procurement vendor database, multi-currency conversion, AI BOQ drafting (Phase 4)
+- Tally / Zoho Books export of invoices and payments
+- Vendor portal for China suppliers to update production and shipping themselves

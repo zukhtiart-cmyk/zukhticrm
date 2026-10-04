@@ -11,11 +11,14 @@ export type AppSettings = {
   whatsappMode: "auto" | "approve";
   /** Saturday summary to every client with an active project */
   weeklySummary: boolean;
+  /** Evening operations summary to owners/admins on WhatsApp */
+  dailySummary: boolean;
 };
 
 const DEFAULTS: AppSettings = {
   whatsappMode: "approve",
   weeklySummary: true,
+  dailySummary: true,
   // Starting values only — check and update them on the Rates page.
   fxRates: { asOf: "not set", perINR: { INR: 1, AED: 23, CNY: 12, USD: 85, EUR: 92 } },
 };

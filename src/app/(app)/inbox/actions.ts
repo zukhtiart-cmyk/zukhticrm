@@ -85,6 +85,7 @@ export async function saveWhatsappSettings(form: FormData) {
   await requireUser("admin");
   await setSetting("whatsappMode", form.get("whatsappMode") === "auto" ? "auto" : "approve");
   await setSetting("weeklySummary", form.get("weeklySummary") === "on");
+  await setSetting("dailySummary", form.get("dailySummary") === "on");
   revalidatePath("/admin");
   revalidatePath("/inbox");
 }

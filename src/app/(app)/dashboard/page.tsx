@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { asc, desc } from "drizzle-orm";
 import { dailyReports, db, offices } from "@/db";
+import { generateDailyReport } from "./actions";
 import { requireUser } from "@/lib/auth";
 import { dashboardData } from "@/lib/dashboard";
 import { date, dateTime, money, titleCase } from "@/lib/format";
@@ -148,6 +149,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <Section title={report ? `Site summary · ${report.day}` : "Daily site summary"}>
             {report ? <p className="whitespace-pre-line text-sm">{report.body}</p> : <Empty>The evening summary of all site updates appears here each day at 7 pm.</Empty>}
             {report && <p className="mt-2 text-xs text-muted">Generated {dateTime(report.createdAt)}</p>}
+            <form action={generateDailyReport} className="mt-3 flex flex-wrap gap-2">
+              <button className="btn-ghost py-1.5 text-xs">Generate now</button>
+              <button name="send" value="1" className="btn-ghost py-1.5 text-xs">Generate &amp; send on WhatsApp</button>
+            </form>
           </Section>
         </div>
       </div>

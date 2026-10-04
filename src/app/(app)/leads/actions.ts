@@ -1,10 +1,13 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { clients, db, leadActivities, leads, leadStatusEnum, projects } from "@/db";
+import { clients, conversations, db, leadActivities, leads, leadStatusEnum, projects } from "@/db";
+import { draftFollowUp } from "@/lib/lead-followup";
+import { deliver, getConversation } from "@/lib/wa-conversations";
+import { appBaseUrl } from "@/lib/portal";
 import { officeScope, requireUser } from "@/lib/auth";
 import { createProjectWithDefaults } from "@/lib/projects";
 
@@ -106,4 +109,38 @@ export async function convertLead(form: FormData) {
     return createProjectWithDefaults(tx, { name: projectName, clientId: client.id, officeId: lead.officeId, siteAddress, managerId: lead.ownerId ?? user.id });
   });
   redirect(`/projects/${project.id}`);
+}
+
+// ---------- Follow-up drafts ----------
+
+export async function draftLeadFollowUp(id: string) {
+  const { user, lead } = await loadLead(id);
+  const activities = await db.query.leadActivities.findMany({ where: eq(leadActivities.leadId, lead.id), orderBy: desc(leadActivities.at), limit: 6 });
+  return draftFollowUp(lead, activities, user.name);
+}
+
+export async function sendLeadFollowUp(id: string, text: string, nextFollowUp: string | null) {
+  const { user, lead } = await loadLead(id);
+  const body = text.trim().slice(0, 2000);
+  if (!body) return { error: "Write a message first." };
+  const conv = await getConversation(lead.phone, lead.name);
+  if (!conv.leadId && !conv.clientId) await db.update(conversations).set({ leadId: lead.id }).where(eq(conversations.id, conv.id));
+  const res = await deliver(conv, body, { appUrl: await appBaseUrl(), intent: "follow-up", authorId: user.id, firstName: lead.name.split(" ")[0] });
+  await db.insert(leadActivities).values({ leadId: lead.id, type: "WHATSAPP", summary: `Follow-up (${res.note}): ${body}`, userId: user.id });
+  await db
+    .update(leads)
+    .set({ nextFollowUpAt: toDate(nextFollowUp), ...(lead.status === "NEW" ? { status: "CONTACTED" as const } : {}) })
+    .where(eq(leads.id, lead.id));
+  revalidatePath(`/leads/${lead.id}`);
+  return { status: res.status, note: res.note };
+}
+
+export async function logManualFollowUp(id: string, text: string, nextFollowUp: string | null) {
+  const { user, lead } = await loadLead(id);
+  await db.insert(leadActivities).values({ leadId: lead.id, type: "WHATSAPP", summary: `Follow-up sent from phone: ${text.trim().slice(0, 2000)}`, userId: user.id });
+  await db
+    .update(leads)
+    .set({ nextFollowUpAt: toDate(nextFollowUp), ...(lead.status === "NEW" ? { status: "CONTACTED" as const } : {}) })
+    .where(eq(leads.id, lead.id));
+  revalidatePath(`/leads/${lead.id}`);
 }

@@ -5,6 +5,7 @@ import { dateTime, money, round2 } from "@/lib/format";
 import { Empty, Section, StatusBadge } from "@/components/ui";
 import { loadProject } from "../../data";
 import { projectMargin } from "@/lib/margin";
+import { AiBoqDraft } from "./ai-draft";
 import { addBoqItem, createQuote, deleteBoqItem, setQuoteStatus, updateBoqItem } from "../../money-actions";
 
 export default async function BoqPage({ params }: { params: Promise<{ id: string }> }) {
@@ -94,6 +95,8 @@ export default async function BoqPage({ params }: { params: Promise<{ id: string
         ))}
         <p className="text-xs text-muted">Columns: room · item · qty · unit · unit cost (internal) · unit price (client) · amount</p>
       </Section>
+
+      <AiBoqDraft projectId={project.id} currency={cur} rates={rates.map((r) => ({ id: r.id, price: r.price }))} />
 
       <Section title="Add an item">
         <form action={addBoqItem} className="grid items-end gap-2 md:grid-cols-[1fr_2fr_0.7fr_auto]">

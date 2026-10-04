@@ -63,3 +63,13 @@ export async function updateOffice(form: FormData) {
     .where(eq(offices.id, id));
   revalidatePath("/admin");
 }
+
+export async function setUserPhone(form: FormData) {
+  const me = await requireUser("admin");
+  const id = String(form.get("id"));
+  const u = await db.query.users.findFirst({ where: eq(users.id, id) });
+  if (!u || (u.role === "OWNER" && me.role !== "OWNER" && u.id !== me.id)) return;
+  const phone = String(form.get("phone") ?? "").trim();
+  await db.update(users).set({ phone: phone || null }).where(eq(users.id, id));
+  revalidatePath("/admin");
+}

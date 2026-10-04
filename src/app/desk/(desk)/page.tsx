@@ -48,7 +48,8 @@ export default async function DeskPage({ searchParams }: { searchParams: Promise
   return (
     <div className="grid gap-5">
       <VoiceDesk
-        projects={rows.map((p) => ({ id: p.id, name: p.name, client: p.client.name, code: p.code }))}
+        projects={rows.map((p) => ({ id: p.id, name: p.name, client: p.client.name, code: p.code, lat: p.siteLat, lng: p.siteLng }))}
+        preselected={rows.some((p) => p.id === preselect)}
         snapshots={snapshots}
         initialProjectId={rows.some((p) => p.id === preselect) ? preselect! : (rows[0]?.id ?? "")}
         defaultSend={defaultSendToClient[user.role]}

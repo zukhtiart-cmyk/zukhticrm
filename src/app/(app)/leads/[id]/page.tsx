@@ -8,6 +8,8 @@ import { Badge, PageHeader, Section, StatusBadge } from "@/components/ui";
 import { convertLead, logActivity, setLeadStatus, updateLead } from "../actions";
 import { LeadForm } from "../lead-form";
 import { leadFormOptions } from "../data";
+import { FollowUpDraft } from "./follow-up";
+import { whatsappConfigured } from "@/lib/whatsapp";
 
 export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -79,6 +81,11 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                 <button className="btn-brass">Convert to client & create project</button>
                 <p className="text-xs text-muted">Creates the client, the 8 standard stages and the payment schedule.</p>
               </form>
+            </Section>
+          )}
+          {!project && (
+            <Section title="Follow up">
+              <FollowUpDraft leadId={lead.id} phone={lead.phone} whatsappLive={whatsappConfigured()} />
             </Section>
           )}
           <Section title="Log a call, message or meeting">

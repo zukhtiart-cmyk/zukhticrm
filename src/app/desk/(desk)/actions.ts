@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { and, eq } from "drizzle-orm";
+import { db, projects } from "@/db";
 import { requireUser } from "@/lib/auth";
+import { officeScope } from "@/lib/permissions";
 import { applyVoiceUpdate, type ConfirmInput } from "@/lib/voice-apply";
 
 export async function confirmVoiceUpdate(input: ConfirmInput) {
@@ -16,4 +19,19 @@ export async function confirmVoiceUpdate(input: ConfirmInput) {
     revalidatePath("/desk");
   }
   return res;
+}
+
+/** Saves the phone's current position as the project's site location (for "nearest site" on the desk). */
+export async function setSiteLocation(projectId: string, lat: number, lng: number) {
+  const user = await requireUser("voice");
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return { error: "Invalid location" };
+  const scope = officeScope(user);
+  const res = await db
+    .update(projects)
+    .set({ siteLat: lat, siteLng: lng })
+    .where(scope ? and(eq(projects.id, projectId), eq(projects.officeId, scope)) : eq(projects.id, projectId))
+    .returning({ id: projects.id });
+  if (!res.length) return { error: "Project not found" };
+  revalidatePath("/desk");
+  return { ok: true };
 }
