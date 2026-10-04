@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { callTool } from "./ai-call";
 import type { Role } from "@/db/schema";
 import { can } from "./permissions";
 import type { VoiceProposal } from "./voice-types";
@@ -142,17 +143,18 @@ ${JSON.stringify(ctx, null, 1)}`;
 
 export async function understand(transcript: string, ctx: VoiceContext): Promise<VoiceProposal> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const res = await client.messages.create({
-    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
-    max_tokens: 2000,
-    system: systemPrompt(ctx),
-    tools: [TOOL],
-    tool_choice: { type: "tool", name: TOOL.name },
-    messages: [{ role: "user", content: `Spoken update from ${ctx.speaker.name}:\n"""${transcript}"""` }],
-  });
-  const block = res.content.find((b) => b.type === "tool_use");
-  if (!block || block.type !== "tool_use") throw new Error("The AI didn't return an update. Try again.");
-  return sanitize(block.input as RawProposal, ctx);
+  const raw = await callTool<RawProposal>(
+    client,
+    {
+      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
+      max_tokens: 2000,
+      system: systemPrompt(ctx),
+      tools: [TOOL],
+      messages: [{ role: "user", content: `Spoken update from ${ctx.speaker.name}:\n"""${transcript}"""` }],
+    },
+    TOOL.name,
+  );
+  return sanitize(raw, ctx);
 }
 
 export type RawProposal = {

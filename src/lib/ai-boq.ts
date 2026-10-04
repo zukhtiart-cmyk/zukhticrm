@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { callTool } from "./ai-call";
 
 export type RateOption = { id: string; category: string; name: string; unit: string; price: number; currency: string };
 export type BoqSuggestion = { room: string; rateItemId: string | null; description: string; unit: string; qty: number; note?: string };
@@ -51,7 +52,8 @@ export async function draftBoq(input: { brief: string; file?: { data: string; me
     text: `Client brief:\n"""${input.brief}"""\n${input.propertyHint ? `Property: ${input.propertyHint}\n` : ""}${input.file ? "A floor plan or reference is attached; read room names and dimensions from it where visible.\n" : ""}Draft the BOQ now.`,
   });
 
-  const res = await client.messages.create({
+  type Out = { items?: { room: string; rate_item_id: string | null; description: string; unit: string; qty: number; note?: string }[]; assumptions?: string[] };
+  const out = await callTool<Out>(client, {
     model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
     max_tokens: 4000,
     system: `You are a senior estimator at Zukhti Home, a turnkey interior design company (India, UAE). Draft a practical room-by-room bill of quantities.
@@ -63,12 +65,8 @@ Rules:
 Rate library:
 ${input.rates.map((r) => `${r.id} | ${r.category} | ${r.name} | ${r.unit}`).join("\n") || "(empty)"}`,
     tools: [TOOL],
-    tool_choice: { type: "tool", name: TOOL.name },
     messages: [{ role: "user", content }],
-  });
-  const block = res.content.find((b) => b.type === "tool_use");
-  if (!block || block.type !== "tool_use") throw new Error("The AI didn't return a BOQ. Try again with more detail.");
-  const out = block.input as { items?: { room: string; rate_item_id: string | null; description: string; unit: string; qty: number; note?: string }[]; assumptions?: string[] };
+  }, TOOL.name);
   const ids = new Set(input.rates.map((r) => r.id));
   const items: BoqSuggestion[] = (out.items ?? [])
     .filter((i) => i.room && i.description && Number(i.qty) > 0)

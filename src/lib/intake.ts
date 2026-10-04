@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { callTool } from "./ai-call";
 import {
   INTAKE_FIELDS,
   SKIP,
@@ -527,7 +528,9 @@ export async function aiExtract(
   ctx: IntakeCtx,
 ): Promise<IntakeFields> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const res = await client.messages.create({
+  const out = await callTool<Record<string, string>>(
+    client,
+    {
     model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
     max_tokens: 800,
     system: `You fill a ${kind === "lead" ? "new client lead" : "new contractor"} form for Zukhti Home, a turnkey interior design company (offices: ${ctx.offices.map((o) => `${o.id} = ${o.name}, ${o.city}`).join("; ")}).
@@ -541,18 +544,15 @@ Rules:
 - Write notes and rates concisely in English.
 Always call fill_form with ALL fields (empty string where unknown).`,
     tools: [tool(kind)],
-    tool_choice: { type: "tool", name: "fill_form" },
     messages: [
       {
         role: "user",
         content: `CURRENT values: ${JSON.stringify(current)}\n\nSpeaker said:\n"""${text}"""`,
       },
     ],
-  });
-  const block = res.content.find((b) => b.type === "tool_use");
-  if (!block || block.type !== "tool_use")
-    throw new Error("AI returned nothing");
-  const out = block.input as Record<string, string>;
+    },
+    "fill_form",
+  );
   const merged: IntakeFields = { ...current };
   for (const d of INTAKE_FIELDS[kind]) {
     const v = cleanValue(kind, d.key, String(out[d.key] ?? ""), ctx);

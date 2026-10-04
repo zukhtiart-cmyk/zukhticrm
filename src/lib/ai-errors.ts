@@ -34,7 +34,9 @@ export function explainAiError(e: unknown) {
   };
 }
 
+/** Short reason for notices: our hint if we recognise it, plus Anthropic's own words. */
 export function shortAiReason(e: unknown) {
   const x = explainAiError(e);
-  return x.hint ? x.hint.split(" — ")[0] : x.message;
+  const said = `${x.status ? `${x.status}: ` : ""}${x.message.slice(0, 160)}`;
+  return x.hint ? `${x.hint.split(" — ")[0]} — Anthropic: "${said}"` : `Anthropic: "${said}"`;
 }
