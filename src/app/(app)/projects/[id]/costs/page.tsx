@@ -61,7 +61,9 @@ export default async function CostsPage({ params }: { params: Promise<{ id: stri
             <dt className="text-xs text-muted">Contractors (agreed)</dt>
             <dd className="font-semibold">{money(c.contractorCommitted, cur)}</dd>
             <dd className="text-xs text-muted">
-              billed {money(c.contractorBilled, cur)} · paid {money(c.contractorPaid, cur)}
+              billed {money(c.contractorBilled, cur)}
+              {can(user.role, "payouts") && <> · paid {money(c.contractorPaid, cur)}</>}
+              {c.directLabour > 0 && <> · incl. {money(c.directLabour, cur)} direct labour</>}
             </dd>
           </div>
           <div className="rounded-xl bg-ivory p-3">

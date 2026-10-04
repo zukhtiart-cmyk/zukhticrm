@@ -1,7 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { and, desc, eq, gte, inArray, lte, ne } from "drizzle-orm";
-import { contractorBills, dailyReports, db, leads, milestones, orders, projects, siteExpenses, siteUpdates, snags, users } from "@/db";
+import { contractorBills, contractorPayments, dailyReports, db, leads, milestones, orders, projects, siteExpenses, siteUpdates, snags, users } from "@/db";
 import { notifyClient } from "./wa-conversations";
 import { warrantyEnds } from "./handover";
 import { sendTemplate, sendText, templateConfigured, whatsappConfigured } from "./whatsapp";
@@ -37,6 +37,7 @@ export async function collectFacts(now = new Date()) {
   const expToday = await db.query.siteExpenses.findMany({ where: gte(siteExpenses.createdAt, since), with: { project: true } });
   const expPending = await db.select({ amount: siteExpenses.amount, currency: siteExpenses.currency }).from(siteExpenses).where(eq(siteExpenses.status, "PENDING"));
   const billsPending = await db.select({ amount: contractorBills.amount }).from(contractorBills).where(eq(contractorBills.status, "PENDING"));
+  const paidOut = await db.query.contractorPayments.findMany({ where: gte(contractorPayments.createdAt, since), with: { contractor: true } });
   const snagsNew = await db.query.snags.findMany({ where: gte(snags.createdAt, since), with: { project: true } });
   const snagsFixed = await db.select({ id: snags.id }).from(snags).where(gte(snags.fixedAt, since));
   const soon = new Date(now.getTime() + 14 * DAY);
@@ -58,6 +59,7 @@ export async function collectFacts(now = new Date()) {
     followUps: followUps.map((l) => l.name),
     silentProjects: silent,
     expensesToday: expToday.map((e) => `${money(e.amount, e.currency)} ${e.description} (${e.project.name})`),
+    paidOut: paidOut.map((p) => `${money(p.amount, p.currency)} to ${p.contractor.name} (${p.mode})`),
     approvalsWaiting: { expenses: expPending.length, bills: billsPending.length },
     snagsNew: snagsNew.map((x) => `${x.project.name}: ${x.description}${x.fromClient ? " (client)" : ""}`),
     snagsFixed: snagsFixed.length,
@@ -84,9 +86,10 @@ export function basicReport(f: DailyFacts) {
     if (f.delivered.length) out.push(`• Delivered: ${f.delivered.join(", ")}`);
     if (f.lateOrders.length) out.push(`• Past ETA: ${f.lateOrders.join(", ")}`);
   }
-  if (f.expensesToday.length || f.approvalsWaiting.expenses || f.approvalsWaiting.bills) {
+  if (f.expensesToday.length || f.paidOut.length || f.approvalsWaiting.expenses || f.approvalsWaiting.bills) {
     out.push("\n*Site costs*");
     if (f.expensesToday.length) out.push(`• Expenses logged: ${f.expensesToday.slice(0, 6).join(", ")}`);
+    if (f.paidOut.length) out.push(`• Paid to contractors/labour: ${f.paidOut.slice(0, 8).join(", ")}`);
     if (f.approvalsWaiting.expenses || f.approvalsWaiting.bills) out.push(`• Waiting for approval: ${f.approvalsWaiting.expenses} expense(s), ${f.approvalsWaiting.bills} contractor bill(s)`);
   }
   if (f.snagsNew.length || f.snagsFixed) {

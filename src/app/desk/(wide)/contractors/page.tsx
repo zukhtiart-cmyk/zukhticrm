@@ -1,9 +1,11 @@
+import { PAYMENT_MODES } from "@/lib/site-costs";
 import Link from "next/link";
 import { db } from "@/db";
 import { requireUser } from "@/lib/auth";
 import { can, officeScope } from "@/lib/permissions";
 import { money } from "@/lib/format";
 import { scopedContractors, scopedProjects } from "@/lib/site-ops";
+import { contractorLedger } from "@/lib/payouts";
 import { ActionForm } from "@/components/action-form";
 import { Badge, Empty, Stat } from "@/components/ui";
 import { ContractorFields } from "./fields";
@@ -12,6 +14,7 @@ import { saveContractor, approveBill, payBill, rejectBill } from "./actions";
 export default async function ContractorsPage() {
   const user = await requireUser("contractors");
   const approver = can(user.role, "approve");
+  const payer = can(user.role, "payouts");
   const [list, projects, offices] = await Promise.all([scopedContractors(user), scopedProjects(user, true), officeScope(user) ? null : db.query.offices.findMany()]);
   const visible = new Set(projects.map((p) => p.id));
   const rows = list.map((c) => {
@@ -29,6 +32,7 @@ export default async function ContractorsPage() {
       bills,
     };
   });
+  const balances = payer ? new Map(await Promise.all(rows.map(async (r) => [r.c.id, await contractorLedger(r.c.id, visible)] as const))) : new Map();
   const allBills = rows.flatMap((r) => r.bills.map((b) => ({ ...b, contractor: r.c })));
   const pending = allBills.filter((b) => b.status === "PENDING");
   const toPay = allBills.filter((b) => b.status === "APPROVED");
@@ -81,8 +85,15 @@ export default async function ContractorsPage() {
                         Reject
                       </button>
                     </>
+                  ) : !payer ? (
+                    <span className="text-xs text-muted">Waiting for payment by accounts</span>
                   ) : (
                     <>
+                      <select name="mode" className="input w-auto py-1 text-xs" aria-label="Paid by">
+                        {PAYMENT_MODES.map((m) => (
+                          <option key={m}>{m}</option>
+                        ))}
+                      </select>
                       <input name="reference" placeholder="UTR / cheque" className="input w-32 py-1.5 text-xs" />
                       <button className="btn-brass px-3 py-1.5 text-xs">
                         Mark paid
@@ -109,7 +120,7 @@ export default async function ContractorsPage() {
                   <th>Contractor</th>
                   <th className="text-right">Work orders</th>
                   <th className="text-right">Billed</th>
-                  <th className="text-right">Balance to pay</th>
+                  {payer && <th className="text-right">Balance</th>}
                 </tr>
               </thead>
               <tbody>
@@ -128,7 +139,20 @@ export default async function ContractorsPage() {
                     </td>
                     <td className="whitespace-nowrap text-right">{r.value ? money(r.value, r.cur) : "—"}</td>
                     <td className="whitespace-nowrap text-right">{r.billed ? money(r.billed, r.cur) : "—"}</td>
-                    <td className={`whitespace-nowrap text-right font-semibold ${r.billed - r.paid > 0 ? "text-clay" : ""}`}>{r.billed - r.paid > 0 ? money(r.billed - r.paid, r.cur) : "—"}</td>
+                    {payer && (
+                      <td className="whitespace-nowrap text-right">
+                        {(() => {
+                          const l = balances.get(r.c.id);
+                          if (!l || (!l.balance && !l.totalPaid)) return "—";
+                          return (
+                            <>
+                              <span className={`font-semibold ${l.balance > 0 ? "text-clay" : ""}`}>{l.balance > 0 ? `${money(l.balance, l.currency)} due` : l.balance < 0 ? `${money(-l.balance, l.currency)} advance` : "Settled"}</span>
+                              <span className="block text-xs text-muted">paid {money(l.totalPaid, l.currency)}</span>
+                            </>
+                          );
+                        })()}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

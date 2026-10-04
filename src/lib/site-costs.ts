@@ -1,6 +1,6 @@
 import "server-only";
 import { eq, inArray } from "drizzle-orm";
-import { boqItems, contractorBills, db, orders, siteExpenses, workOrders } from "@/db";
+import { boqItems, contractorBills, contractorPayments, db, orders, siteExpenses, workOrders } from "@/db";
 import { round2 } from "./format";
 
 /**
@@ -15,6 +15,7 @@ export async function projectCosts(projectId: string) {
     db.select({ amount: siteExpenses.amount, status: siteExpenses.status }).from(siteExpenses).where(eq(siteExpenses.projectId, projectId)),
     db.select({ id: workOrders.id, amount: workOrders.amount, status: workOrders.status }).from(workOrders).where(eq(workOrders.projectId, projectId)),
   ]);
+  const pays = await db.select({ workOrderId: contractorPayments.workOrderId, amount: contractorPayments.amount }).from(contractorPayments).where(eq(contractorPayments.projectId, projectId));
   const bills = wos.length ? await db.select({ workOrderId: contractorBills.workOrderId, amount: contractorBills.amount, status: contractorBills.status }).from(contractorBills).where(inArray(contractorBills.workOrderId, wos.map((w) => w.id))) : [];
 
   const budget = items.reduce((a, i) => a + i.qty * i.unitCost, 0);
@@ -27,10 +28,14 @@ export async function projectCosts(projectId: string) {
   let contractorCommitted = 0;
   for (const w of live) {
     const billed = okBills.filter((b) => b.workOrderId === w.id).reduce((a, b) => a + b.amount, 0);
-    contractorCommitted += Math.max(w.amount, billed);
+    const paidOnWo = pays.filter((p) => p.workOrderId === w.id).reduce((a, p) => a + p.amount, 0);
+    contractorCommitted += Math.max(w.amount, billed, paidOnWo);
   }
+  // Wages and payments made without a work order (daily labour, helpers) are costs too.
+  const directLabour = pays.filter((p) => !p.workOrderId || !live.some((w) => w.id === p.workOrderId)).reduce((a, p) => a + p.amount, 0);
+  contractorCommitted += directLabour;
   const contractorBilled = okBills.reduce((a, b) => a + b.amount, 0);
-  const contractorPaid = bills.filter((b) => b.status === "PAID").reduce((a, b) => a + b.amount, 0);
+  const contractorPaid = pays.reduce((a, p) => a + p.amount, 0);
   const committed = purchase + expensesApproved + contractorCommitted;
   const projectedCost = Math.max(budget, committed);
   return {
@@ -42,6 +47,7 @@ export async function projectCosts(projectId: string) {
     contractorCommitted: round2(contractorCommitted),
     contractorBilled: round2(contractorBilled),
     contractorPaid: round2(contractorPaid),
+    directLabour: round2(directLabour),
     committed: round2(committed),
     usedPct: budget ? Math.round((committed / budget) * 100) : 0,
     overrun: budget > 0 && committed > budget,
@@ -50,4 +56,11 @@ export async function projectCosts(projectId: string) {
 }
 
 export const EXPENSE_CATEGORIES = ["Material", "Labour", "Transport", "Tools & consumables", "Food & site", "Other"] as const;
-export const TRADES = ["Carpenter", "Painter", "Electrician", "Plumber", "False ceiling", "Civil / mason", "Tiling", "Polish", "Fabrication", "Cleaning", "Other"] as const;
+export const TRADES = ["Carpenter", "Painter", "Electrician", "Plumber", "False ceiling", "Civil / mason", "Tiling", "Polish", "Fabrication", "Cleaning", "Labour / helper", "Other"] as const;
+export const PAYMENT_KINDS = [
+  ["ADVANCE", "Advance"],
+  ["WAGES", "Wages / daily labour"],
+  ["BILL", "Against a bill"],
+  ["OTHER", "Other"],
+] as const;
+export const PAYMENT_MODES = ["UPI", "Bank transfer", "Cash", "Cheque"] as const;

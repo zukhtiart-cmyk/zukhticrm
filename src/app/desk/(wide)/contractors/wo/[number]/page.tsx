@@ -1,7 +1,8 @@
+import { PAYMENT_MODES } from "@/lib/site-costs";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
-import { contractorBills, db, workOrders } from "@/db";
+import { contractorBills, contractorPayments, db, workOrders } from "@/db";
 import { requireUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { date, money } from "@/lib/format";
@@ -25,7 +26,8 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ numb
   const cur = wo.currency;
   const live = wo.bills.filter((b) => b.status !== "REJECTED");
   const billed = live.reduce((a, b) => a + b.amount, 0);
-  const paid = wo.bills.filter((b) => b.status === "PAID").reduce((a, b) => a + b.amount, 0);
+  const payer = can(user.role, "payouts");
+  const paid = payer ? (await db.select({ amount: contractorPayments.amount }).from(contractorPayments).where(eq(contractorPayments.workOrderId, wo.id))).reduce((a, p) => a + p.amount, 0) : 0;
 
   return (
     <div className="grid gap-5">
@@ -87,7 +89,8 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ numb
           <div className="mb-2 flex flex-wrap justify-between gap-2 text-sm">
             <p className="label mb-0">Running bills</p>
             <p>
-              Billed {money(billed, cur)} of {money(wo.amount, cur)} · paid {money(paid, cur)}
+              Billed {money(billed, cur)} of {money(wo.amount, cur)}
+              {payer && <> · paid {money(paid, cur)} (incl. advances)</>}
             </p>
           </div>
           <div className="mb-3 h-2 overflow-hidden rounded-full bg-line/70">
@@ -128,9 +131,16 @@ export default async function WorkOrderPage({ params }: { params: Promise<{ numb
                             Reject
                           </button>
                         </>
+                      ) : !payer ? (
+                        <span className="text-xs text-muted">Waiting for payment by accounts</span>
                       ) : (
                         <>
-                          <input name="reference" placeholder="UTR / cheque" className="input w-28 py-1 text-xs" />
+                          <select name="mode" className="input w-auto py-1 text-xs" aria-label="Paid by">
+                        {PAYMENT_MODES.map((m) => (
+                          <option key={m}>{m}</option>
+                        ))}
+                      </select>
+                      <input name="reference" placeholder="UTR / cheque" className="input w-28 py-1 text-xs" />
                           <button className="btn-brass px-2.5 py-1 text-xs">
                             Mark paid
                           </button>

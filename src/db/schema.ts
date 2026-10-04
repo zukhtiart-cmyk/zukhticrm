@@ -462,6 +462,31 @@ export const contractorBills = pgTable("contractor_bills", {
   createdAt: created(),
 });
 
+/** Every payout to a contractor or labourer: bill payments, advances, wages. Recorded by owner/accounts only. */
+export const contractorPayments = pgTable("contractor_payments", {
+  id: id(),
+  contractorId: text("contractor_id")
+    .notNull()
+    .references(() => contractors.id),
+  projectId: text("project_id").references(() => projects.id, { onDelete: "set null" }),
+  workOrderId: text("work_order_id").references(() => workOrders.id, { onDelete: "set null" }),
+  billId: text("bill_id").references(() => contractorBills.id, { onDelete: "set null" }),
+  /** BILL, ADVANCE, WAGES, OTHER */
+  kind: text("kind").notNull().default("ADVANCE"),
+  amount: money("amount").notNull(),
+  currency: text("currency").notNull(),
+  /** Cash, UPI, Bank transfer, Cheque */
+  mode: text("mode").notNull().default("UPI"),
+  reference: text("reference"),
+  note: text("note"),
+  receiptUrl: text("receipt_url"),
+  paidOn: timestamp("paid_on", { withTimezone: true }).notNull().defaultNow(),
+  paidById: text("paid_by_id")
+    .notNull()
+    .references(() => users.id),
+  createdAt: created(),
+});
+
 /** Punch-list items before (and after) handover. */
 export const snags = pgTable("snags", {
   id: id(),
@@ -582,12 +607,21 @@ export const siteExpensesRelations = relations(siteExpenses, ({ one }) => ({
 export const contractorsRelations = relations(contractors, ({ one, many }) => ({
   office: one(offices, { fields: [contractors.officeId], references: [offices.id] }),
   workOrders: many(workOrders),
+  payments: many(contractorPayments),
+}));
+export const contractorPaymentsRelations = relations(contractorPayments, ({ one }) => ({
+  contractor: one(contractors, { fields: [contractorPayments.contractorId], references: [contractors.id] }),
+  project: one(projects, { fields: [contractorPayments.projectId], references: [projects.id] }),
+  workOrder: one(workOrders, { fields: [contractorPayments.workOrderId], references: [workOrders.id] }),
+  bill: one(contractorBills, { fields: [contractorPayments.billId], references: [contractorBills.id] }),
+  paidBy: one(users, { fields: [contractorPayments.paidById], references: [users.id] }),
 }));
 export const workOrdersRelations = relations(workOrders, ({ one, many }) => ({
   project: one(projects, { fields: [workOrders.projectId], references: [projects.id] }),
   contractor: one(contractors, { fields: [workOrders.contractorId], references: [contractors.id] }),
   stage: one(stages, { fields: [workOrders.stageId], references: [stages.id] }),
   bills: many(contractorBills),
+  payments: many(contractorPayments),
 }));
 export const contractorBillsRelations = relations(contractorBills, ({ one }) => ({
   workOrder: one(workOrders, { fields: [contractorBills.workOrderId], references: [workOrders.id] }),

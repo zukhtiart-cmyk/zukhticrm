@@ -5,7 +5,7 @@
  */
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { db, clients, contractorBills, contractors, siteExpenses, snags, warranties, workOrders, designs, vendors, leads, leadActivities, offices, orders, projects, rateItems, siteUpdates, stages, users, visits, boqItems, milestones } from "../src/db";
+import { db, clients, contractorBills, contractorPayments, contractors, siteExpenses, snags, warranties, workOrders, designs, vendors, leads, leadActivities, offices, orders, projects, rateItems, siteUpdates, stages, users, visits, boqItems, milestones } from "../src/db";
 import { createProjectWithDefaults, recomputeProjectProgress, syncMilestoneAmounts } from "../src/lib/projects";
 
 const PASSWORD = "zukhti123";
@@ -167,8 +167,14 @@ async function main() {
       { number: `WO-${new Date().getFullYear()}-0002`, projectId: project.id, contractorId: sunil.id, stageId: byName("Painting & finishes").id, title: "Full house painting", scope: "Putty, primer, 2 coats Royale. Approx 4200 sqft.", amount: 118000, currency: "INR", createdById: supervisor.id, createdAt: days(-5) },
     ])
     .returning();
+  const [helper] = await db.insert(contractors).values({ name: "Mahesh (helper)", trade: "Labour / helper", phone: "+919820055504", officeId: mumbai.id, rateNotes: "₹800/day" }).returning();
+  const [ra1] = await db.insert(contractorBills).values({ workOrderId: woCarp.id, amount: 60000, note: "RA1 — carcasses for 3 wardrobes", status: "PAID", submittedById: supervisor.id, reviewedAt: days(-13), paidAt: days(-12), reference: "UTR 4413", createdAt: days(-14) }).returning();
+  await db.insert(contractorPayments).values([
+    { contractorId: ramesh.id, projectId: project.id, workOrderId: woCarp.id, kind: "ADVANCE", amount: 20000, currency: "INR", mode: "UPI", reference: "UPI 88123", note: "Mobilisation advance", paidById: people[5].id, paidOn: days(-29) },
+    { contractorId: ramesh.id, projectId: project.id, workOrderId: woCarp.id, billId: ra1.id, kind: "BILL", amount: 60000, currency: "INR", mode: "Bank transfer", reference: "UTR 4413", paidById: people[5].id, paidOn: days(-12) },
+    { contractorId: helper.id, projectId: project.id, kind: "WAGES", amount: 4800, currency: "INR", mode: "Cash", note: "6 days, week of demolition debris clearing", paidById: owner.id, paidOn: days(-8) },
+  ]);
   await db.insert(contractorBills).values([
-    { workOrderId: woCarp.id, amount: 60000, note: "RA1 — carcasses for 3 wardrobes", status: "PAID", submittedById: supervisor.id, paidAt: days(-12), reference: "UTR 4413", createdAt: days(-14) },
     { workOrderId: woCarp.id, amount: 45000, note: "RA2 — kitchen carcass and shutters", status: "PENDING", submittedById: supervisor.id, createdAt: days(-1) },
   ]);
   await db.insert(siteExpenses).values([

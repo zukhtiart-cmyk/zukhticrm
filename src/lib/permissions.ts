@@ -21,15 +21,17 @@ export type Capability =
   /** contractors, work orders, submit bills */
   | "contractors"
   /** snag list and handover */
-  | "snags";
+  | "snags"
+  /** pay contractors and labour, see their ledgers (owner and accounts only) */
+  | "payouts";
 
 const matrix: Record<Role, Capability[]> = {
-  OWNER: ["leads", "projects.view", "projects.edit", "boq", "payments", "orders", "visits", "stages", "design", "rates", "admin", "voice", "inbox", "expenses", "approve", "contractors", "snags"],
+  OWNER: ["leads", "projects.view", "projects.edit", "boq", "payments", "orders", "visits", "stages", "design", "rates", "admin", "voice", "inbox", "expenses", "approve", "contractors", "snags", "payouts"],
   ADMIN: ["leads", "projects.view", "projects.edit", "boq", "payments", "orders", "visits", "stages", "design", "rates", "admin", "voice", "inbox", "expenses", "approve", "contractors", "snags"],
   DESIGNER: ["leads", "projects.view", "boq", "design", "visits", "rates", "voice", "inbox", "expenses", "snags"],
   SUPERVISOR: ["projects.view", "stages", "visits", "voice", "expenses", "contractors", "snags"],
   PROCUREMENT: ["projects.view", "orders", "rates", "voice", "expenses"],
-  ACCOUNTS: ["projects.view", "payments", "voice", "expenses", "approve", "contractors"],
+  ACCOUNTS: ["projects.view", "payments", "voice", "expenses", "approve", "contractors", "payouts"],
 };
 
 export function can(role: Role, capability: Capability) {

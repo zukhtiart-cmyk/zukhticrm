@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BookOpen, ClipboardCheck, FolderKanban, HardHat, Home, LogOut, MessageCircle, Mic, Package, Receipt, Settings, Users } from "lucide-react";
+import { BarChart3, BookOpen, ClipboardCheck, FolderKanban, HandCoins, HardHat, Home, LogOut, MessageCircle, Mic, Package, Receipt, Settings, Users } from "lucide-react";
 
-const ICONS = { home: Home, dashboard: BarChart3, leads: Users, projects: FolderKanban, inbox: MessageCircle, procurement: Package, expenses: Receipt, contractors: HardHat, snags: ClipboardCheck, voice: Mic, rates: BookOpen, admin: Settings };
+const ICONS = { home: Home, dashboard: BarChart3, leads: Users, projects: FolderKanban, inbox: MessageCircle, procurement: Package, expenses: Receipt, contractors: HardHat, payouts: HandCoins, snags: ClipboardCheck, voice: Mic, rates: BookOpen, admin: Settings };
 /** Shown in the phone bottom bar; the rest are in the desktop sidebar only. */
 const MOBILE: (keyof typeof ICONS)[] = ["home", "leads", "projects", "inbox", "voice"];
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };

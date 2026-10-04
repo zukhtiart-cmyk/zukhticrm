@@ -4,10 +4,11 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { contractorBills, contractors, db, workOrders } from "@/db";
+import { contractorBills, contractorPayments, contractors, db, workOrders } from "@/db";
+import { can } from "@/lib/permissions";
 import { requireUser, type CurrentUser } from "@/lib/auth";
 import { officeScope } from "@/lib/permissions";
-import { TRADES } from "@/lib/site-costs";
+import { PAYMENT_MODES, TRADES } from "@/lib/site-costs";
 import { findContractor, formFile, nextWorkOrderNumber, scopedProject } from "@/lib/site-ops";
 import { saveFile } from "@/lib/storage";
 
@@ -145,7 +146,25 @@ async function reviewBill(form: FormData, decision: "approve" | "reject" | "paid
   } else if (decision === "reject" && bill.status === "PENDING") {
     await db.update(contractorBills).set({ status: "REJECTED", reviewedById: user.id, reviewedAt: new Date(), note: [bill.note, String(form.get("reason") ?? "").trim()].filter(Boolean).join(" — Rejected: ") || bill.note }).where(eq(contractorBills.id, bill.id));
   } else if (decision === "paid" && bill.status === "APPROVED") {
-    await db.update(contractorBills).set({ status: "PAID", paidAt: new Date(), reference: String(form.get("reference") ?? "").trim() || null }).where(eq(contractorBills.id, bill.id));
+    // Paying is for owner and accounts only, and every payment goes on the contractor's ledger.
+    if (!can(user.role, "payouts")) return;
+    const reference = String(form.get("reference") ?? "").trim() || null;
+    const modeRaw = String(form.get("mode") ?? "");
+    const mode = (PAYMENT_MODES as readonly string[]).includes(modeRaw) ? modeRaw : "Bank transfer";
+    await db.insert(contractorPayments).values({
+      contractorId: wo.contractorId,
+      projectId: wo.projectId,
+      workOrderId: wo.id,
+      billId: bill.id,
+      kind: "BILL",
+      amount: bill.amount,
+      currency: wo.currency,
+      mode,
+      reference,
+      paidById: user.id,
+    });
+    await db.update(contractorBills).set({ status: "PAID", paidAt: new Date(), reference }).where(eq(contractorBills.id, bill.id));
+    revalidatePath("/desk/payments");
   }
   refresh(wo);
 }

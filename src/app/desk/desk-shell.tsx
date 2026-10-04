@@ -5,12 +5,13 @@ import { can, isDeskOnly, roleLabels } from "@/lib/permissions";
 import { deskLogout } from "@/app/login/actions";
 
 /** Shared header for the Voice Desk app; `wide` for table screens like procurement. */
-export function DeskShell({ user, wide, active, children }: { user: CurrentUser; wide?: boolean; active: "updates" | "procurement" | "expenses" | "contractors" | "snags"; children: React.ReactNode }) {
+export function DeskShell({ user, wide, active, children }: { user: CurrentUser; wide?: boolean; active: "updates" | "procurement" | "expenses" | "contractors" | "snags" | "payments"; children: React.ReactNode }) {
   const width = wide ? "max-w-5xl" : "max-w-lg";
   const tabs = [
     { href: "/desk", label: "Updates", key: "updates" },
     ...(can(user.role, "expenses") ? [{ href: "/desk/expenses", label: "Expenses", key: "expenses" }] : []),
     ...(can(user.role, "contractors") ? [{ href: "/desk/contractors", label: "Contractors", key: "contractors" }] : []),
+    ...(can(user.role, "payouts") ? [{ href: "/desk/payments", label: "Payments", key: "payments" }] : []),
     ...(can(user.role, "snags") ? [{ href: "/desk/snags", label: "Snags", key: "snags" }] : []),
     ...(can(user.role, "orders") ? [{ href: "/desk/procurement", label: "Procurement", key: "procurement" }] : []),
   ];

@@ -19,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ...(can(user.role, "orders") ? [{ href: "/desk/procurement", label: "Procurement", icon: "procurement" } as NavItem] : []),
     ...(can(user.role, "expenses") ? [{ href: "/desk/expenses", label: "Site expenses", icon: "expenses", badge: can(user.role, "approve") ? await pendingApprovals(user) : 0 } as NavItem] : []),
     ...(can(user.role, "contractors") ? [{ href: "/desk/contractors", label: "Contractors", icon: "contractors" } as NavItem] : []),
+    ...(can(user.role, "payouts") ? [{ href: "/desk/payments", label: "Payments out", icon: "payouts" } as NavItem] : []),
     ...(can(user.role, "snags") ? [{ href: "/desk/snags", label: "Snags", icon: "snags" } as NavItem] : []),
     { href: "/desk", label: "Voice desk", icon: "voice" },
     ...(can(user.role, "rates") ? [{ href: "/rates", label: "Rates", icon: "rates" } as NavItem] : []),
