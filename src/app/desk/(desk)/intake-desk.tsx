@@ -155,12 +155,33 @@ export function IntakeDesk({
             { type: audio.type },
           ),
         );
-      const res = await fetch("/api/voice/intake", { method: "POST", body });
-      const json = (await res
-        .json()
-        .catch(() => ({
-          error: `Something went wrong (${res.status})`,
-        }))) as Response;
+      // Retry once if the connection drops (weak mobile signal), with a time limit.
+      let res: globalThis.Response | null = null;
+      for (let attempt = 0; attempt < 2 && !res; attempt++) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 55_000);
+        try {
+          res = await fetch("/api/voice/intake", {
+            method: "POST",
+            body,
+            signal: ctrl.signal,
+          });
+        } catch (err) {
+          if ((err as Error).name === "AbortError")
+            throw new Error("This is taking too long — tap Send to try again.");
+          if (attempt === 1)
+            throw new Error(
+              "Connection dropped — check your signal and tap Send again (your words are back in the box).",
+            );
+          await new Promise((r) => setTimeout(r, 1500));
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      if (!res) throw new Error("Connection dropped — tap Send again.");
+      const json = (await res.json().catch(() => ({
+        error: `Something went wrong (${res.status})`,
+      }))) as Response;
       if (!res.ok) throw new Error(json.error || "Something went wrong");
       if (audio && json.heard)
         setTurns((t) => [...t, { from: "me", text: json.heard }]);
@@ -184,6 +205,17 @@ export function IntakeDesk({
       });
     } catch (e) {
       setError((e as Error).message);
+      // Don't lose what was said: put it back in the text box and take it off the chat.
+      if (text.trim()) {
+        setTyped(text.trim());
+        setTurns((t) =>
+          t.length &&
+          t[t.length - 1].from === "me" &&
+          t[t.length - 1].text === text.trim()
+            ? t.slice(0, -1)
+            : t,
+        );
+      }
     } finally {
       setBusy(false);
     }
