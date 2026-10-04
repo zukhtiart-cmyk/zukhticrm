@@ -50,7 +50,7 @@ The portal never shows costs, margins, vendor names, internal notes, issues or d
 ## Set up and deploy on Vercel
 
 1. **Import the repo** in Vercel (New Project → this repo). Framework: Next.js.
-2. **Database:** in the Vercel project → Storage → add **Neon Postgres**. It sets `DATABASE_URL`. Also add `DIRECT_URL` with Neon's *unpooled* connection string.
+2. **Database:** in the Vercel project → Storage → add **Neon Postgres** and connect it to the project. It sets the database variables automatically. No extra connection string is needed.
 3. **Photo storage:** Storage → add **Blob**. It sets `BLOB_READ_WRITE_TOKEN`.
 4. **Environment variables** (Settings → Environment Variables), see `.env.example`:
    - `AUTH_SECRET`: a long random string (`openssl rand -base64 32`)

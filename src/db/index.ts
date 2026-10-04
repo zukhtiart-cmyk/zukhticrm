@@ -6,7 +6,7 @@ const globalForDb = globalThis as unknown as { pg?: ReturnType<typeof postgres> 
 
 const client =
   globalForDb.pg ??
-  postgres(process.env.DATABASE_URL!, {
+  postgres((process.env.DATABASE_URL || process.env.POSTGRES_URL)!, {
     // Serverless-friendly: small pool, works with Neon/Supabase poolers.
     max: process.env.NODE_ENV === "production" ? 5 : 10,
     prepare: false,
