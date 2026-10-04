@@ -12,6 +12,12 @@ import {
 } from "@/lib/intake-fields";
 import { saveIntake } from "./intake-actions";
 import { Zuki } from "@/components/zuki";
+import {
+  primeSpeech,
+  setAudioMode,
+  speak,
+  stopSpeaking,
+} from "@/lib/speech-client";
 
 type SpeechRec = {
   lang: string;
@@ -127,29 +133,14 @@ export function IntakeDesk({
       );
       return then?.();
     }
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "en-IN";
-    u.rate = 1;
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      setSpeaking(false);
-      then?.();
-    };
-    u.onstart = () => setSpeaking(true);
-    u.onend = finish;
-    u.onerror = finish;
     setSpeaking(true);
-    // Safety net: some phones never fire onend.
-    setTimeout(
-      () => {
-        if (!window.speechSynthesis.speaking) finish();
+    speak(text, {
+      start: () => setSpeaking(true),
+      end: () => {
+        setSpeaking(false);
+        then?.();
       },
-      1500 + text.length * 90,
-    );
-    window.speechSynthesis.speak(u);
+    });
   }
 
   async function send(text: string, audio?: Blob) {
@@ -307,6 +298,7 @@ export function IntakeDesk({
         };
         rec.current = r;
         try {
+          setAudioMode("play-and-record");
           r.start();
           setListening(true);
         } catch {
@@ -341,9 +333,10 @@ export function IntakeDesk({
   }
 
   function micButton() {
+    primeSpeech();
     if (listening) return rec.current?.stop();
     setSpeaking(false);
-    window.speechSynthesis?.cancel();
+    stopSpeaking();
     if (recording) {
       recorder.current?.stop();
       return setRecording(false);
@@ -462,6 +455,7 @@ export function IntakeDesk({
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            primeSpeech();
             const t = typed;
             setTyped("");
             send(t);
@@ -486,11 +480,32 @@ export function IntakeDesk({
 
         {ios && (
           <p className="mt-2 text-xs text-muted">
-            On iPhone: tap Zuki for each answer. If the mic misbehaves, tap the
-            text box and use the 🎤 on your keyboard.
+            On iPhone: tap Zuki for each answer. Can&apos;t hear Zuki? Flip the
+            silent switch on the side of the phone off and turn the volume up.
+            If the mic misbehaves, use the 🎤 on your keyboard in the text box.
           </p>
         )}
         <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
+          <button
+            type="button"
+            onClick={() => {
+              // Replaying from a tap always works, even where automatic speech is blocked.
+              primeSpeech();
+              const last = [...turns]
+                .reverse()
+                .find((t) => t.from === "ai")?.text;
+              if (last) {
+                setSpeaking(true);
+                speak(last, {
+                  start: () => setSpeaking(true),
+                  end: () => setSpeaking(false),
+                });
+              }
+            }}
+            className="flex items-center gap-1 font-semibold text-brass"
+          >
+            <Volume2 size={14} /> Repeat question
+          </button>
           <button
             type="button"
             onClick={() => setVoiceOn((v) => !v)}
