@@ -1,3 +1,4 @@
+import { UpdateBanner } from "@/components/update-banner";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
@@ -11,7 +12,10 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-screen">
+        <UpdateBanner version={process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || "dev"} />
+        {children}
+      </body>
     </html>
   );
 }
