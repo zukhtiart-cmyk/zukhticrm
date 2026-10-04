@@ -8,15 +8,14 @@ import {
   ImagePlus,
   Loader2,
   MapPin,
-  Mic,
   RotateCcw,
   Send,
-  Square,
   Trash2,
   X,
 } from "lucide-react";
 import type { UnderstandResult, VoiceProposal } from "@/lib/voice-types";
 import { confirmVoiceUpdate, setSiteLocation } from "./actions";
+import { Zuki } from "@/components/zuki";
 import {
   distanceM,
   isNetworkError,
@@ -79,7 +78,7 @@ const shortDate = (d: string | null) =>
 
 function Snapshot({ s }: { s: ProjectSnapshot }) {
   return (
-    <details className="mt-3 rounded-xl bg-ivory px-3 py-2 text-sm" open>
+    <details className="mt-3 rounded-xl bg-ivory px-3 py-2 text-sm">
       <summary className="cursor-pointer text-xs font-semibold text-muted">
         Now: {s.currentStage} · overall {s.progress}%
       </summary>
@@ -1371,38 +1370,19 @@ export function VoiceDesk({
 
       {useServerSpeech ? (
         <div className="card flex flex-col items-center p-6 text-center">
-          {!recording && !audio && (
-            <>
-              <button
-                onClick={startRecording}
-                className="grid h-28 w-28 place-items-center rounded-full bg-brass text-white shadow-lg transition active:scale-95"
-                aria-label="Start recording"
-              >
-                <Mic size={44} />
-              </button>
-              <p className="mt-3 text-sm font-semibold">Tap and speak</p>
-              <p className="mt-1 max-w-xs text-xs text-muted">
-                e.g. &ldquo;{guide.example}&rdquo; — Hindi, English or Hinglish
-                is fine
-              </p>
-            </>
-          )}
-          {recording && (
-            <>
-              <button
-                onClick={stopRecording}
-                className="relative grid h-28 w-28 place-items-center rounded-full bg-clay text-white shadow-lg"
-                aria-label="Stop recording"
-              >
-                <span className="absolute inset-0 animate-ping rounded-full bg-clay/40" />
-                <Square size={36} className="relative" />
-              </button>
-              <p className="mt-3 text-sm font-semibold">
-                Listening… {Math.floor(seconds / 60)}:
-                {String(seconds % 60).padStart(2, "0")}
-              </p>
-              <p className="text-xs text-muted">Tap to stop</p>
-            </>
+          {(recording || !audio) && (
+            <Zuki
+              state={recording ? "listening" : "idle"}
+              bubble={
+                recording
+                  ? `I'm listening… ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
+                  : `What happened on site? e.g. “${guide.example}” — Hindi, English or Hinglish is fine.`
+              }
+              hint={
+                recording ? "Tap Zuki when you're done" : "Tap Zuki and speak"
+              }
+              onTap={recording ? stopRecording : startRecording}
+            />
           )}
           {!recording && audio && (
             <div className="w-full">
@@ -1444,50 +1424,22 @@ export function VoiceDesk({
               </button>
             ))}
           </div>
-          {!listening ? (
-            <>
-              <button
-                onClick={startDictation}
-                disabled={!dictationSupported}
-                className="grid h-28 w-28 place-items-center rounded-full bg-brass text-white shadow-lg transition active:scale-95 disabled:opacity-40"
-                aria-label="Start speaking"
-              >
-                <Mic size={44} />
-              </button>
-              <p className="mt-3 text-sm font-semibold">
-                {dictationSupported
-                  ? "Tap and speak"
-                  : "Voice typing not supported here"}
-              </p>
-              <p className="mt-1 max-w-xs text-xs text-muted">
-                {dictationSupported ? (
-                  <>
-                    e.g. &ldquo;{guide.example}&rdquo; — your words appear in
-                    the box below
-                  </>
-                ) : (
-                  "Tap the box below and use the 🎤 key on your phone keyboard to dictate."
-                )}
-              </p>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={stopDictation}
-                className="relative grid h-28 w-28 place-items-center rounded-full bg-clay text-white shadow-lg"
-                aria-label="Stop"
-              >
-                <span className="absolute inset-0 animate-ping rounded-full bg-clay/40" />
-                <Square size={36} className="relative" />
-              </button>
-              <p className="mt-3 text-sm font-semibold">
-                Listening… tap to stop
-              </p>
-              {interim && (
-                <p className="mt-2 max-w-xs text-sm text-muted">{interim}</p>
-              )}
-            </>
-          )}
+          <Zuki
+            state={listening ? "listening" : "idle"}
+            bubble={
+              listening
+                ? "I'm listening…"
+                : dictationSupported
+                  ? `What happened on site? e.g. “${guide.example}” — your words appear in the box below.`
+                  : "Voice typing isn't supported in this browser — tap the box below and use the 🎤 on your keyboard."
+            }
+            userText={listening && interim ? interim : undefined}
+            hint={
+              listening ? "Tap Zuki when you're done" : "Tap Zuki and speak"
+            }
+            onTap={listening ? stopDictation : startDictation}
+            disabled={!dictationSupported}
+          />
           {serverSpeech && !listening && (
             <button
               type="button"

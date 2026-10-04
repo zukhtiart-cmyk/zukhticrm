@@ -2,15 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import {
-  Check,
-  Loader2,
-  Mic,
-  Send,
-  Square,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { Check, Loader2, Send, Volume2, VolumeX } from "lucide-react";
 import {
   INTAKE_FIELDS,
   SKIP,
@@ -19,6 +11,7 @@ import {
   type IntakeKind,
 } from "@/lib/intake-fields";
 import { saveIntake } from "./intake-actions";
+import { Zuki } from "@/components/zuki";
 
 type SpeechRec = {
   lang: string;
@@ -96,6 +89,7 @@ export function IntakeDesk({
   const [notice, setNotice] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState<string | null>(null);
   const [voiceOn, setVoiceOn] = useState(true);
+  const [speaking, setSpeaking] = useState(false);
   const [handsFree, setHandsFree] = useState(true);
   const [dictation, setDictation] = useState(false);
   const [saved, setSaved] = useState<{ href: string; name: string } | null>(
@@ -124,14 +118,37 @@ export function IntakeDesk({
   useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
   function say(text: string, then?: () => void) {
-    if (!voiceOn || typeof window === "undefined" || !window.speechSynthesis)
+    if (!voiceOn || typeof window === "undefined" || !window.speechSynthesis) {
+      // Muted: Zuki still "talks" briefly so it's clear there's a new question.
+      setSpeaking(true);
+      setTimeout(
+        () => setSpeaking(false),
+        Math.min(2500, 300 + text.length * 25),
+      );
       return then?.();
+    }
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "en-IN";
     u.rate = 1;
-    u.onend = () => then?.();
-    u.onerror = () => then?.();
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      setSpeaking(false);
+      then?.();
+    };
+    u.onstart = () => setSpeaking(true);
+    u.onend = finish;
+    u.onerror = finish;
+    setSpeaking(true);
+    // Safety net: some phones never fire onend.
+    setTimeout(
+      () => {
+        if (!window.speechSynthesis.speaking) finish();
+      },
+      1500 + text.length * 90,
+    );
     window.speechSynthesis.speak(u);
   }
 
@@ -325,6 +342,7 @@ export function IntakeDesk({
 
   function micButton() {
     if (listening) return rec.current?.stop();
+    setSpeaking(false);
     window.speechSynthesis?.cancel();
     if (recording) {
       recorder.current?.stop();
@@ -388,54 +406,58 @@ export function IntakeDesk({
   return (
     <div className="grid gap-4">
       <div className="card p-4">
-        <ul className="grid max-h-72 gap-2 overflow-y-auto text-sm">
-          {turns.map((t, i) => (
-            <li
-              key={i}
-              className={
-                t.from === "ai"
-                  ? "mr-8 rounded-2xl rounded-tl-sm bg-ivory px-3 py-2"
-                  : "ml-8 rounded-2xl rounded-tr-sm bg-ink px-3 py-2 text-paper"
-              }
-            >
-              {t.text}
-            </li>
-          ))}
-          {interim && (
-            <li className="ml-8 rounded-2xl bg-ink/60 px-3 py-2 text-paper">
-              {interim}
-            </li>
-          )}
-        </ul>
-
-        <div className="mt-4 flex flex-col items-center">
-          <button
-            onClick={micButton}
-            disabled={busy}
-            className={`relative grid h-24 w-24 place-items-center rounded-full text-white shadow-lg transition active:scale-95 disabled:opacity-50 ${active ? "bg-clay" : "bg-brass"}`}
-            aria-label={active ? "Stop" : "Speak"}
-          >
-            {active && (
-              <span className="absolute inset-0 animate-ping rounded-full bg-clay/40" />
-            )}
-            {busy ? (
-              <Loader2 className="animate-spin" size={36} />
-            ) : active ? (
-              <Square size={32} className="relative" />
-            ) : (
-              <Mic size={40} />
-            )}
-          </button>
-          <p className="mt-2 text-xs text-muted">
-            {busy
+        <Zuki
+          state={
+            busy
+              ? "thinking"
+              : active
+                ? "listening"
+                : speaking
+                  ? "speaking"
+                  : "idle"
+          }
+          bubble={[...turns].reverse().find((t) => t.from === "ai")?.text ?? ""}
+          userText={
+            active
+              ? interim || (listening ? "…" : "Recording… tap Zuki to finish")
+              : busy
+                ? [...turns].reverse().find((t) => t.from === "me")?.text
+                : undefined
+          }
+          hint={
+            busy
               ? "Filling the form…"
               : active
-                ? "Listening… tap to finish"
+                ? "Listening… tap Zuki when you're done"
                 : started
-                  ? "Tap and answer"
-                  : "Tap and speak"}
-          </p>
-        </div>
+                  ? "Tap Zuki to answer"
+                  : "Tap Zuki and speak"
+          }
+          onTap={micButton}
+          disabled={busy}
+        />
+
+        {turns.length > 2 && (
+          <details className="mt-3 text-sm">
+            <summary className="cursor-pointer text-xs font-semibold text-muted">
+              Conversation so far
+            </summary>
+            <ul className="mt-2 grid max-h-60 gap-2 overflow-y-auto">
+              {turns.map((t, i) => (
+                <li
+                  key={i}
+                  className={
+                    t.from === "ai"
+                      ? "mr-8 rounded-2xl rounded-tl-sm bg-ivory px-3 py-2"
+                      : "ml-8 rounded-2xl rounded-tr-sm bg-ink px-3 py-2 text-paper"
+                  }
+                >
+                  {t.text}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
 
         <form
           onSubmit={(e) => {
@@ -464,8 +486,8 @@ export function IntakeDesk({
 
         {ios && (
           <p className="mt-2 text-xs text-muted">
-            On iPhone: tap the mic for each answer. If the mic misbehaves, tap
-            the text box and use the 🎤 on your keyboard.
+            On iPhone: tap Zuki for each answer. If the mic misbehaves, tap the
+            text box and use the 🎤 on your keyboard.
           </p>
         )}
         <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
