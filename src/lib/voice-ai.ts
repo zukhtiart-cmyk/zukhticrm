@@ -24,7 +24,15 @@ export async function transcribe(audio: File, hint: string): Promise<string> {
   body.append("model", process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-transcribe");
   body.append("prompt", hint);
   const res = await fetch("https://api.openai.com/v1/audio/transcriptions", { method: "POST", headers: { Authorization: `Bearer ${key}` }, body });
-  if (!res.ok) throw new Error(`Couldn't transcribe the recording (${res.status}). Try again or type it.`);
+  if (!res.ok) {
+    const err = (await res.json().catch(() => null)) as { error?: { code?: string; type?: string; message?: string } } | null;
+    const code = err?.error?.code || err?.error?.type || "";
+    if (code === "insufficient_quota")
+      throw new Error("Voice-to-text isn't available: the OpenAI account has no credit. Add credit at platform.openai.com → Settings → Billing, or use phone voice typing / type the update.");
+    if (res.status === 401) throw new Error("Voice-to-text key is not valid. Check OPENAI_API_KEY in Vercel, or use phone voice typing / type the update.");
+    if (res.status === 429) throw new Error("Voice-to-text is busy (rate limit). Wait a minute and try again, or use phone voice typing / type the update.");
+    throw new Error(`Couldn't transcribe the recording (${res.status}${err?.error?.message ? `: ${err.error.message}` : ""}). Try again or type it.`);
+  }
   const json = (await res.json()) as { text?: string };
   return (json.text ?? "").trim();
 }

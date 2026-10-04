@@ -162,6 +162,7 @@ export function VoiceDesk({
   const [saved, setSaved] = useState<{ sendStatus: string | null; changes: number } | null>(null);
 
   // Phone dictation (used when server speech-to-text isn't configured)
+  const [useServerSpeech, setUseServerSpeech] = useState(serverSpeech);
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
   const [dictLang, setDictLang] = useState("en-IN");
@@ -290,8 +291,15 @@ export function VoiceDesk({
         if (audio) body.append("audio", new File([audio], `voice.${audio.type.includes("mp4") ? "m4a" : "webm"}`, { type: audio.type }));
       }
       const res = await fetch("/api/voice/understand", { method: "POST", body });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Something went wrong");
+      const json = await res.json().catch(() => ({ error: `Something went wrong (${res.status})` }));
+      if (!res.ok) {
+        if (json.speechFailed) {
+          // Server voice-to-text failed: switch to the phone's own voice typing so work can continue.
+          setAudio(null);
+          setUseServerSpeech(false);
+        }
+        throw new Error(json.error || "Something went wrong");
+      }
       const r = json as UnderstandResult;
       // Keep the original voice note when answering a follow-up question.
       setResult({ ...r, audioUrl: r.audioUrl ?? result?.audioUrl });
@@ -595,7 +603,7 @@ export function VoiceDesk({
         {snapshots[projectId] && <Snapshot s={snapshots[projectId]} />}
       </div>
 
-      {serverSpeech ? (
+      {useServerSpeech ? (
       <div className="card flex flex-col items-center p-6 text-center">
         {!recording && !audio && (
           <>
@@ -625,6 +633,18 @@ export function VoiceDesk({
               <RotateCcw size={16} /> Record again
             </button>
           </div>
+        )}
+        {!recording && (
+          <button
+            type="button"
+            onClick={() => {
+              setAudio(null);
+              setUseServerSpeech(false);
+            }}
+            className="mt-3 text-xs font-semibold text-muted underline"
+          >
+            Use phone voice typing instead
+          </button>
         )}
       </div>
       ) : (
@@ -660,11 +680,16 @@ export function VoiceDesk({
               {interim && <p className="mt-2 max-w-xs text-sm text-muted">{interim}</p>}
             </>
           )}
+          {serverSpeech && !listening && (
+            <button type="button" onClick={() => setUseServerSpeech(true)} className="mt-3 text-xs font-semibold text-muted underline">
+              Record a voice note instead
+            </button>
+          )}
         </div>
       )}
 
       <div className="card p-4">
-        <label className="label" htmlFor="typed">{!serverSpeech ? "Your update (edit if needed)" : audio ? "Anything to add? (optional)" : "Or type the update"}</label>
+        <label className="label" htmlFor="typed">{!useServerSpeech ? "Your update (edit if needed)" : audio ? "Anything to add? (optional)" : "Or type the update"}</label>
         <textarea id="typed" value={typed} onChange={(e) => setTyped(e.target.value)} rows={3} className="input" placeholder="Carpentry 70%, kitchen shutters fixed…" />
       </div>
 
