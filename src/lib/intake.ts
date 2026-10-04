@@ -62,9 +62,9 @@ function resolveDate(text: string, today: string) {
   const base = new Date(`${today}T12:00:00`);
   const add = (n: number) =>
     new Date(base.getTime() + n * 86400000).toISOString().slice(0, 10);
+  if (/day after tomorrow|parso/.test(t)) return add(2);
   if (/\btoday|aaj\b/.test(t)) return add(0);
   if (/\btomorrow|kal\b/.test(t)) return add(1);
-  if (/day after|parso/.test(t)) return add(2);
   const inDays = t.match(/in (\d+) days?|(\d+) din/);
   if (inDays) return add(Number(inDays[1] ?? inDays[2]));
   if (/next week|agle hafte/.test(t)) return add(7);
@@ -136,7 +136,301 @@ function cleanValue(
   return value.slice(0, 500);
 }
 
-/** Rule-based extraction used when AI isn't available: phone, email and keywords, plus the answer to the last question. */
+// ---------- Rule-based understanding (used when AI isn't available) ----------
+
+const AREAS: Record<string, string> = {
+  // Mumbai
+  andheri: "Mumbai",
+  bandra: "Mumbai",
+  juhu: "Mumbai",
+  worli: "Mumbai",
+  powai: "Mumbai",
+  goregaon: "Mumbai",
+  malad: "Mumbai",
+  borivali: "Mumbai",
+  kandivali: "Mumbai",
+  santacruz: "Mumbai",
+  khar: "Mumbai",
+  colaba: "Mumbai",
+  "lower parel": "Mumbai",
+  parel: "Mumbai",
+  dadar: "Mumbai",
+  chembur: "Mumbai",
+  ghatkopar: "Mumbai",
+  mulund: "Mumbai",
+  vikhroli: "Mumbai",
+  "marine drive": "Mumbai",
+  malabar: "Mumbai",
+  byculla: "Mumbai",
+  wadala: "Mumbai",
+  kurla: "Mumbai",
+  "vile parle": "Mumbai",
+  jogeshwari: "Mumbai",
+  versova: "Mumbai",
+  lokhandwala: "Mumbai",
+  prabhadevi: "Mumbai",
+  mahim: "Mumbai",
+  sion: "Mumbai",
+  bkc: "Mumbai",
+  thane: "Thane",
+  "navi mumbai": "Navi Mumbai",
+  vashi: "Navi Mumbai",
+  kharghar: "Navi Mumbai",
+  panvel: "Navi Mumbai",
+  mumbai: "Mumbai",
+  bombay: "Mumbai",
+  pune: "Pune",
+  lonavala: "Lonavala",
+  alibaug: "Alibaug",
+  nashik: "Nashik",
+  goa: "Goa",
+  delhi: "Delhi",
+  gurgaon: "Gurugram",
+  gurugram: "Gurugram",
+  noida: "Noida",
+  bangalore: "Bengaluru",
+  bengaluru: "Bengaluru",
+  hyderabad: "Hyderabad",
+  jaipur: "Jaipur",
+  ahmedabad: "Ahmedabad",
+  surat: "Surat",
+  indore: "Indore",
+  // UAE
+  jumeirah: "Dubai",
+  marina: "Dubai",
+  "dubai marina": "Dubai",
+  downtown: "Dubai",
+  "business bay": "Dubai",
+  "palm jumeirah": "Dubai",
+  jlt: "Dubai",
+  jvc: "Dubai",
+  "arabian ranches": "Dubai",
+  "emirates hills": "Dubai",
+  "dubai hills": "Dubai",
+  mirdif: "Dubai",
+  "al barsha": "Dubai",
+  deira: "Dubai",
+  dubai: "Dubai",
+  "abu dhabi": "Abu Dhabi",
+  sharjah: "Sharjah",
+  ajman: "Ajman",
+};
+
+function findArea(text: string) {
+  const t = text.toLowerCase();
+  // Longest names first so "navi mumbai" wins over "mumbai".
+  const keys = Object.keys(AREAS).sort((a, b) => b.length - a.length);
+  const area = keys.find((k) => new RegExp(`\\b${k}\\b`).test(t));
+  if (!area) return null;
+  const city = AREAS[area];
+  const pretty = area
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace("Bkc", "BKC")
+    .replace("Jlt", "JLT")
+    .replace("Jvc", "JVC");
+  return pretty.toLowerCase() === city.toLowerCase()
+    ? city
+    : `${pretty}, ${city}`;
+}
+
+const STOP = new Set([
+  "phone",
+  "number",
+  "mobile",
+  "contact",
+  "no",
+  "from",
+  "in",
+  "at",
+  "and",
+  "who",
+  "is",
+  "he",
+  "she",
+  "they",
+  "ka",
+  "ki",
+  "ke",
+  "hai",
+  "wants",
+  "lives",
+  "staying",
+  "having",
+  "has",
+  "with",
+  "for",
+  "the",
+  "a",
+  "an",
+  "client",
+  "lead",
+  "contractor",
+  "new",
+  "add",
+  "naam",
+  "name",
+  "called",
+  "named",
+  "mr",
+  "mrs",
+  "ms",
+  "sir",
+  "madam",
+  "bhai",
+  "ji",
+  "it's",
+  "its",
+  "this",
+  "my",
+  "came",
+  "through",
+  "via",
+  "looking",
+  "need",
+  "needs",
+  "interested",
+  "please",
+  "hi",
+  "hello",
+  "ok",
+  "okay",
+  "yes",
+  "budget",
+  "property",
+  "about",
+  "regarding",
+  "lives",
+  "living",
+]);
+const NON_NAMES =
+  /^(apartment|villa|flat|bhk|bedroom|office|carpenter|painter|electrician|plumber|instagram|referral|website|whatsapp|mumbai|dubai|budget|rate|rates|upi|tiling|tile|helper|labour|labor)$/i;
+
+function findName(text: string, loose = false) {
+  // "name is …" beats "new lead, …" when both are said.
+  const m =
+    text.match(
+      /(?:name is|naam(?: hai)?|named|called|this is)\s*[:,-]?\s+(?:(?:mr|mrs|ms|dr)\.?\s+)?(.+)/i,
+    ) ??
+    text.match(
+      /(?:new lead|new client|new contractor|lead|client|contractor|add)\s*[:,-]?\s+(?:is\s+)?(?:(?:mr|mrs|ms|dr)\.?\s+)?(.+)/i,
+    );
+  const tail = (m ? m[1] : text).split(/[,.;\n]/)[0];
+  const words: string[] = [];
+  const tokens = tail.split(/\s+/);
+  // Skip a leading title (Mr / Mrs / Dr…).
+  let titled = false;
+  while (
+    tokens.length &&
+    /^(mr|mrs|ms|miss|dr|sir|madam|shri|smt)\.?$/i.test(tokens[0])
+  ) {
+    tokens.shift();
+    titled = true;
+  }
+  // Without "name is…", "new lead…" or a title, only trust a bare name when it's the answer to "what's the name?".
+  if (!m && !titled && !loose) return null;
+  for (const w of tokens) {
+    const clean = w.replace(/[^\p{L}.'&-]/gu, "");
+    if (
+      !clean ||
+      /\d/.test(w) ||
+      STOP.has(clean.toLowerCase()) ||
+      NON_NAMES.test(clean)
+    )
+      break;
+    words.push(clean.charAt(0).toUpperCase() + clean.slice(1));
+    if (words.length === 4) break;
+  }
+  return words.length ? words.join(" ") : null;
+}
+
+function findBudget(text: string) {
+  const t = text.toLowerCase().replace(/,/g, "");
+  const m = t.match(
+    /(\d+(?:\.\d+)?)\s*(crores?|cr|lakhs?|lacs?|lakh|l\b|k\b|thousand|aed|dirhams?|million|mn)/,
+  );
+  if (!m) return /\b(\d+(?:\.\d+)?)\s*(cr|crore)/.test(t) ? null : null;
+  const n = Number(m[1]);
+  const unit = m[2];
+  const aed = /aed|dirham/.test(t) || /dubai|uae/.test(t);
+  if (/^cr/.test(unit)) return n >= 1 ? "Luxury (₹1Cr+)" : "Premium (₹40L–1Cr)";
+  if (/^la|^l$/.test(unit))
+    return n >= 100
+      ? "Luxury (₹1Cr+)"
+      : n >= 40
+        ? "Premium (₹40L–1Cr)"
+        : "Mid (₹15–40L)";
+  if (unit === "million" || unit === "mn")
+    return aed ? "Luxury (AED 400K+)" : `${m[1]} million`;
+  if (unit === "k" || unit === "thousand")
+    return aed
+      ? n >= 400
+        ? "Luxury (AED 400K+)"
+        : "Mid (AED 150–400K)"
+      : `${m[0]}`;
+  if (/aed|dirham/.test(unit))
+    return n >= 400000 ? "Luxury (AED 400K+)" : "Mid (AED 150–400K)";
+  return null;
+}
+
+const SYNONYMS: Record<string, [RegExp, string][]> = {
+  propertyType: [
+    [/\b(\d\s*bhk|bhk|bedroom|flat|apartment|apt)\b/i, "Apartment"],
+    [/\b(villa|bungalow|row ?house|independent house)\b/i, "Villa"],
+    [/\bpenthouse\b/i, "Penthouse"],
+    [/\b(office|workspace|co-?working)\b/i, "Office"],
+    [/\b(shop|showroom|store|retail|boutique)\b/i, "Retail"],
+    [/\b(hotel|restaurant|cafe|café|resort|bar)\b/i, "Hospitality"],
+  ],
+  source: [
+    [/\b(insta|instagram)\b/i, "Instagram"],
+    [/\b(refer|referred|referral|reference|recommended)\b/i, "Referral"],
+    [/\b(website|google|online|site)\b/i, "Website"],
+    [/\bwhats ?app\b/i, "WhatsApp"],
+    [/\bwalk[- ]?in|came to (the )?office\b/i, "Walk-in"],
+    [/\barchitect\b/i, "Architect"],
+  ],
+  trade: [
+    [/\b(carpent\w*|wood ?work|furniture)\b/i, "Carpenter"],
+    [/\b(paint\w*)\b/i, "Painter"],
+    [/\b(electric\w*|wiring)\b/i, "Electrician"],
+    [/\b(plumb\w*)\b/i, "Plumber"],
+    [/\b(false ceiling|pop|gypsum|ceiling)\b/i, "False ceiling"],
+    [/\b(mason|civil|brick ?work)\b/i, "Civil / mason"],
+    [/\b(til(e|es|ing)|flooring|marble)\b/i, "Tiling"],
+    [/\bpolish\w*\b/i, "Polish"],
+    [/\b(fabricat\w*|weld\w*|metal ?work)\b/i, "Fabrication"],
+    [/\bclean\w*\b/i, "Cleaning"],
+    [/\b(helper|labour|labor|majdoor|mazdoor)\b/i, "Labour / helper"],
+  ],
+};
+
+function bySynonym(key: string, text: string) {
+  return SYNONYMS[key]?.find(([re]) => re.test(text))?.[1] ?? null;
+}
+
+function findRates(text: string) {
+  const m = text.match(
+    /(?:rs\.?|₹|inr|aed)?\s*\d[\d,]*(?:\.\d+)?\s*(?:rs|rupees|₹|aed)?\s*(?:per|\/|a|an)\s*(?:sq\.? ?ft|square (?:feet|foot)|sqft|day|din|rft|running (?:feet|foot)|point|hour|month|piece|nos?)/gi,
+  );
+  return m ? m.map((x) => x.trim()).join(", ") : null;
+}
+
+function findBank(text: string) {
+  const parts: string[] = [];
+  const upi = text.match(
+    /\b[\w.-]{2,}@(?:ok\w+|ybl|paytm|upi|axl|ibl|apl|icici|sbi|hdfcbank|axisbank|kotak|yesbank|\w+)\b/i,
+  );
+  if (upi && !/\.(com|in|net|org)\b/i.test(upi[0])) parts.push(`UPI ${upi[0]}`);
+  const acc = text.match(
+    /(?:a\/c|account|acct|ac)\s*(?:no\.?|number)?\s*[:-]?\s*(\d[\d\s]{7,20}\d)/i,
+  );
+  if (acc) parts.push(`A/c ${acc[1].replace(/\s/g, "")}`);
+  const ifsc = text.match(/\b[A-Z]{4}0[A-Z0-9]{6}\b/i);
+  if (ifsc) parts.push(`IFSC ${ifsc[0].toUpperCase()}`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/** Rule-based extraction used when AI isn't available: understands names, numbers, areas, budgets, trades and dates. */
 export function basicExtract(
   kind: IntakeKind,
   text: string,
@@ -146,35 +440,63 @@ export function basicExtract(
 ): IntakeFields {
   const f: IntakeFields = { ...current };
   const set = (k: string, v: string | null | undefined) => {
-    if (v && !(f[k] ?? "").trim()) f[k] = cleanValue(kind, k, v, ctx);
+    if (!v || (f[k] ?? "").trim()) return;
+    const clean = cleanValue(kind, k, v, ctx);
+    if (clean) f[k] = clean;
   };
+
+  // An answer to a question goes to that field first (understood by type where possible).
   if (asking) {
-    // The whole answer belongs to the field we just asked about.
-    const v = cleanValue(kind, asking, text, ctx);
+    const smart: Record<string, string | null> = {
+      name: findName(text, true) ?? text,
+      city: findArea(text) ?? text,
+      budgetBand: findBudget(text) ?? text,
+      propertyType: bySynonym("propertyType", text),
+      source: bySynonym("source", text) ?? "Other",
+      trade: bySynonym("trade", text) ?? text,
+      rateNotes: text,
+      bankDetails: findBank(text) ?? text,
+      notes: text,
+    };
+    const v = cleanValue(
+      kind,
+      asking,
+      (asking in smart ? smart[asking] : text) ?? "",
+      ctx,
+    );
     if (v) f[asking] = v;
   }
-  set("phone", text.match(/(\+?\d[\d\s-]{8,16}\d)/)?.[1] ?? null);
-  if (kind === "lead")
-    set("email", text.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? null);
-  set(
-    "name",
-    text.match(
-      /(?:name is|naam|called|named)\s+([A-Z][\w.]*(?:\s+[A-Z][\w.]*){0,3})/i,
-    )?.[1] ?? null,
-  );
-  for (const def of INTAKE_FIELDS[kind].filter((d) => d.options)) {
-    const hit = def.options!.find((o) =>
-      new RegExp(`\\b${o.toLowerCase().split(/[ /(]/)[0]}`, "i").test(text),
-    );
-    if (hit && def.key !== "budgetBand") set(def.key, hit);
-  }
+
+  // Phone: the longest run of digits that looks like a number.
+  const phone = text
+    .match(/\+?\d[\d\s-]{8,16}\d/g)
+    ?.map((x) => normalizePhone(x))
+    .find(Boolean);
+  set("phone", phone ?? null);
   const office = officeFor(text, ctx);
   if (office) set("office", office);
+
   if (kind === "lead") {
-    const d = /follow|call|visit|meet/i.test(text)
+    set("email", text.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? null);
+    if (asking !== "name") set("name", findName(text));
+    set("city", findArea(text));
+    set("propertyType", bySynonym("propertyType", text));
+    set("source", bySynonym("source", text));
+    set("budgetBand", findBudget(text));
+    const d = /follow|call|visit|meet|baat|milna/i.test(text)
       ? resolveDate(text, ctx.today)
       : null;
     if (d) set("nextFollowUpAt", d);
+    if (!f.office && f.city) set("office", officeFor(f.city, ctx));
+  } else {
+    if (asking !== "name") set("name", findName(text));
+    set("trade", bySynonym("trade", text));
+    set("rateNotes", findRates(text));
+    set("bankDetails", findBank(text));
+    if (!f.office) {
+      const area = findArea(text);
+      if (area) set("office", officeFor(area, ctx));
+    }
   }
   return f;
 }

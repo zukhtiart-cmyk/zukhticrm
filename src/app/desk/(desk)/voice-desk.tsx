@@ -418,7 +418,7 @@ export function VoiceDesk({
     setError(null);
     const rec = new Rec();
     rec.lang = dictLang;
-    rec.continuous = true;
+    rec.continuous = !/iPad|iPhone|iPod/.test(navigator.userAgent);
     rec.interimResults = true;
     rec.onresult = (e) => {
       let finalText = "";
