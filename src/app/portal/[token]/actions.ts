@@ -2,7 +2,9 @@
 
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { db, designs, projects, quotes } from "@/db";
+import { db, designs, projects, quotes, snags } from "@/db";
+import { gte } from "drizzle-orm";
+import { saveFile } from "@/lib/storage";
 import { loadPortalClient } from "@/lib/portal-data";
 
 async function ownsProject(token: string, projectId: string) {
@@ -38,4 +40,25 @@ export async function acceptQuote(form: FormData) {
     .where(and(eq(quotes.id, String(form.get("quoteId"))), eq(quotes.projectId, project.id), eq(quotes.status, "SENT")));
   revalidatePath(`/portal/${token}`);
   revalidatePath(`/projects/${project.id}`, "layout");
+}
+
+/** Client reports something to fix (after or close to handover). */
+export async function reportSnag(_: unknown, form: FormData) {
+  const token = String(form.get("token"));
+  const project = await ownsProject(token, String(form.get("projectId")));
+  const description = String(form.get("description") ?? "").trim().slice(0, 500);
+  if (description.length < 3) return { error: "Please describe what needs fixing." };
+  const recent = await db.select({ id: snags.id }).from(snags).where(and(eq(snags.projectId, project.id), eq(snags.fromClient, true), gte(snags.createdAt, new Date(Date.now() - 86400000))));
+  if (recent.length >= 15) return { error: "That's a lot for one day — please message your project manager and we'll visit." };
+  const photo = form.get("photo");
+  let photoUrl: string | null = null;
+  if (photo instanceof File && photo.size > 0) {
+    if (!photo.type.startsWith("image/") || photo.size > 15 * 1024 * 1024) return { error: "The photo must be an image under 15 MB." };
+    photoUrl = await saveFile(photo, `photos/${project.id}`);
+  }
+  await db.insert(snags).values({ projectId: project.id, room: String(form.get("room") ?? "").trim().slice(0, 60) || "General", description, photoUrl, fromClient: true });
+  revalidatePath(`/portal/${token}`);
+  revalidatePath(`/projects/${project.id}`, "layout");
+  revalidatePath("/desk/snags");
+  return { ok: "Thanks — we've added it to your snag list and the team will schedule a fix." };
 }

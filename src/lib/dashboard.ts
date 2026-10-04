@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gte, ne } from "drizzle-orm";
 import { db, leads, milestones, projects, quotes, siteUpdates, stages } from "@/db";
 import { convert } from "./fx";
 import { projectMargin } from "./margin";
+import { projectCosts } from "./site-costs";
 import { getSettings } from "./settings";
 
 const DAY = 86400000;
@@ -40,12 +41,12 @@ export async function dashboardData(officeId?: string) {
   type Row = {
     id: string; name: string; client: string; office: string; officeId: string; status: string; currency: string; progress: number;
     currentStage: string; handover: Date | null; handoverLate: boolean; contract: number; collected: number; outstanding: number; dueNow: number;
-    marginPct: number; estimatedPct: number; slipping: string[]; lastUpdate: Date | null; stale: boolean; lateOrders: number; issue: string | null;
+    marginPct: number; estimatedPct: number; slipping: string[]; lastUpdate: Date | null; stale: boolean; lateOrders: number; issue: string | null; budget: number; committed: number; costUsedPct: number; overrun: boolean;
   };
   const rows: Row[] = [];
   for (const p of live) {
     const cur = p.office.currency;
-    const m = await projectMargin(p.id);
+    const [m, costs] = await Promise.all([projectMargin(p.id), projectCosts(p.id)]);
     const contract = m.sell * (1 + p.office.taxRate / 100);
     const collected = p.milestones.filter((x) => x.status === "PAID").reduce((a, x) => a + (x.paidAmount ?? x.amount), 0);
     const dueNow = p.milestones
@@ -78,6 +79,10 @@ export async function dashboardData(officeId?: string) {
       stale: p.status === "ACTIVE" && (!lastUpdate || now.getTime() - lastUpdate.getTime() > 7 * DAY),
       lateOrders: lateOrders.length,
       issue: p.updates[0]?.issues ?? null,
+      budget: costs.budget,
+      committed: costs.committed,
+      costUsedPct: costs.usedPct,
+      overrun: costs.overrun,
     });
   }
 
@@ -122,6 +127,10 @@ export async function dashboardData(officeId?: string) {
     ...rows.filter((r) => r.slipping.length).map((r) => ({ projectId: r.id, project: r.name, text: `Behind plan: ${r.slipping.join(", ")}`, tone: "clay" as const })),
     ...rows.filter((r) => r.stale).map((r) => ({ projectId: r.id, project: r.name, text: r.lastUpdate ? "No site update for over a week" : "No site updates yet", tone: "brass" as const })),
     ...rows.filter((r) => r.lateOrders).map((r) => ({ projectId: r.id, project: r.name, text: `${r.lateOrders} order${r.lateOrders > 1 ? "s" : ""} past ETA`, tone: "brass" as const })),
+    ...rows.filter((r) => r.overrun).map((r) => ({ projectId: r.id, project: r.name, text: `Costs over budget (${r.costUsedPct}% of BOQ cost committed)`, tone: "clay" as const })),
+    ...rows
+      .filter((r) => !r.overrun && r.status === "ACTIVE" && r.budget > 0 && r.costUsedPct > r.progress + 25)
+      .map((r) => ({ projectId: r.id, project: r.name, text: `Spending ${r.costUsedPct}% of budget at ${r.progress}% progress`, tone: "brass" as const })),
     ...rows.filter((r) => r.contract > 0 && r.marginPct < 20).map((r) => ({ projectId: r.id, project: r.name, text: `Low margin: ${r.marginPct}%`, tone: "clay" as const })),
   ];
 

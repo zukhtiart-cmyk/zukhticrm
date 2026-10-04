@@ -4,7 +4,7 @@ Team workspace for Zukhti Home, a turnkey interior design company. It covers lea
 
 Built with Next.js 15, Postgres (Drizzle ORM) and Tailwind. It's designed to run on Vercel.
 
-## What's in this version (Phases 1–4)
+## What's in this version (Phases 1–5)
 
 | Area | What it does |
 | --- | --- |
@@ -20,6 +20,10 @@ Built with Next.js 15, Postgres (Drizzle ORM) and Tailwind. It's designed to run
 | **Exchange rates** (Phase 4) | Set on the Rates page. Each PO keeps the rate from the day it was raised. |
 | **True margin** (Phase 4) | The BOQ margin switches from estimated cost to actual PO cost, converted to the project currency, as lines get ordered. |
 | **Owner dashboard** (Phase 4) | Contract value, collected, due now, average margin, open leads, late orders, per-office figures, projects needing attention and the evening site summary. Totals are in INR-equivalent. |
+| **Site expenses** (Phase 5) | Supervisors, designers and procurement log cash spent on site with a photo of the bill (Voice Desk → Expenses). Owner, admin and accounts approve or reject, then mark reimbursed. Nobody but the owner approves their own expense. |
+| **Contractors** (Phase 5) | Carpenters, painters, electricians… with rates and payment details. Numbered, printable work orders (`WO-2026-0001`) per project and stage. Running bills (RA1, RA2…) can't exceed the work order; accounts approves and marks them paid with a UTR. |
+| **Site costs** (Phase 5) | Project tab comparing the BOQ cost budget with what's committed (purchase orders + contractor work orders + approved expenses). Flags overruns and spending ahead of progress on the dashboard. |
+| **Snags & handover** (Phase 5) | Room-by-room snag list with before/after photos: supervisors mark fixed, designers or admins verify. Warranties and care instructions per project. *Mark handed over* is blocked while snags are open (unless overridden) and can WhatsApp the client their handover pack. Clients see the pack in the portal and report new snags there. A maintenance (AMC) reminder goes to the client on WhatsApp after 6 or 12 months. |
 | **AI helpers** (Phase 4) | *Draft BOQ with AI* from a brief or floor plan (image/PDF), using your rate library; you tick the lines to keep. *Draft a follow-up* on each lead, sent on WhatsApp or opened in your own WhatsApp. An evening site summary at 7 pm IST for owners and admins. |
 | **Rate library** | Standard cost and sell rates per item. |
 | **Voice desk** | See below. |
@@ -36,6 +40,7 @@ The Voice Desk is a separate, phone-friendly app with its own sign-in page at **
 - **No signal on site?** Record as usual: the update and photos are kept on the phone and listed as *Saved on this phone*. Tap **Send now** when back online. Open the desk once with signal so it also opens offline.
 - **Nearest site:** tap *Nearest site* to pick the project you're standing at (within 1 km). The first time at a site, tap *Save my current location as the site*.
 - **Procurement** tab (procurement, owner, admin): vendors, purchase orders and shipments.
+- **Expenses**, **Contractors** and **Snags** tabs (Phase 5), shown to the roles that use them. Accounts sees everything waiting for approval at the top.
 - Each role is shown what it records and a snapshot of the project before speaking:
 
 | Role | Records | Sees before speaking |
@@ -134,7 +139,7 @@ How it behaves:
    - `AUTH_SECRET`: a long random string (`openssl rand -base64 32`)
    - `OPENAI_API_KEY`: speech-to-text for voice notes
    - `ANTHROPIC_API_KEY`: understanding updates, client messages, AI BOQ drafts, lead follow-ups and the daily summary (`ANTHROPIC_MODEL` defaults to `claude-sonnet-5-5`). Without it, follow-ups use templates and the summary is a plain list.
-   - `CRON_SECRET`: protects the scheduled jobs (weekly client summary, daily owner summary)
+   - `CRON_SECRET`: protects the scheduled jobs (weekly client summary; the daily job sends the owner summary and clients' maintenance reminders)
    - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`: optional for now; client updates are saved as *queued* until these are set
    - `APP_URL`: optional, your live address (e.g. `https://crm.zukhtihome.com`) used in portal links; otherwise taken from the request
 5. **Deploy.** Database tables are created automatically on each deploy (`vercel-build` runs the migrations).

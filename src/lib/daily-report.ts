@@ -1,10 +1,13 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { and, desc, eq, gte, inArray, lte, ne } from "drizzle-orm";
-import { dailyReports, db, leads, milestones, orders, projects, siteUpdates, users } from "@/db";
+import { contractorBills, dailyReports, db, leads, milestones, orders, projects, siteExpenses, siteUpdates, snags, users } from "@/db";
+import { notifyClient } from "./wa-conversations";
+import { warrantyEnds } from "./handover";
 import { sendTemplate, sendText, templateConfigured, whatsappConfigured } from "./whatsapp";
 
 const DAY = 86400000;
+const money = (n: number, c: string) => new Intl.NumberFormat("en-IN", { style: "currency", currency: c, maximumFractionDigits: 0 }).format(n);
 
 /** Today's date in India time (HQ), e.g. 2026-10-04. */
 export function istDay(d = new Date()) {
@@ -31,6 +34,18 @@ export async function collectFacts(now = new Date()) {
     .where(and(lte(leads.nextFollowUpAt, new Date(now.getTime() + DAY)), inArray(leads.status, ["NEW", "CONTACTED", "SITE_VISIT", "DESIGN", "QUOTED"])));
   const active = await db.query.projects.findMany({ where: eq(projects.status, "ACTIVE"), with: { updates: { orderBy: desc(siteUpdates.createdAt), limit: 1 } } });
   const silent = active.filter((p) => !p.updates[0] || p.updates[0].createdAt < since).map((p) => p.name);
+  const expToday = await db.query.siteExpenses.findMany({ where: gte(siteExpenses.createdAt, since), with: { project: true } });
+  const expPending = await db.select({ amount: siteExpenses.amount, currency: siteExpenses.currency }).from(siteExpenses).where(eq(siteExpenses.status, "PENDING"));
+  const billsPending = await db.select({ amount: contractorBills.amount }).from(contractorBills).where(eq(contractorBills.status, "PENDING"));
+  const snagsNew = await db.query.snags.findMany({ where: gte(snags.createdAt, since), with: { project: true } });
+  const snagsFixed = await db.select({ id: snags.id }).from(snags).where(gte(snags.fixedAt, since));
+  const soon = new Date(now.getTime() + 14 * DAY);
+  const amcDue = await db.select({ name: projects.name, at: projects.amcDueAt }).from(projects).where(and(eq(projects.status, "HANDED_OVER"), lte(projects.amcDueAt, soon)));
+  const ws = await db.query.warranties.findMany({ with: { project: true } });
+  const warrantiesEnding = ws
+    .map((w) => ({ w, ends: warrantyEnds(w.startsOn, w.months) }))
+    .filter((x) => x.ends && x.ends >= now && x.ends <= new Date(now.getTime() + 30 * DAY))
+    .map((x) => `${x.w.item} (${x.w.project.name})`);
 
   return {
     day: istDay(now),
@@ -42,10 +57,15 @@ export async function collectFacts(now = new Date()) {
     newLeads: newLeads.map((l) => `${l.name} — ${l.source}`),
     followUps: followUps.map((l) => l.name),
     silentProjects: silent,
+    expensesToday: expToday.map((e) => `${money(e.amount, e.currency)} ${e.description} (${e.project.name})`),
+    approvalsWaiting: { expenses: expPending.length, bills: billsPending.length },
+    snagsNew: snagsNew.map((x) => `${x.project.name}: ${x.description}${x.fromClient ? " (client)" : ""}`),
+    snagsFixed: snagsFixed.length,
+    amcDue: amcDue.map((p) => p.name),
+    warrantiesEnding,
   };
 }
 
-const money = (n: number, c: string) => new Intl.NumberFormat("en-IN", { style: "currency", currency: c, maximumFractionDigits: 0 }).format(n);
 
 /** Plain summary used when no AI key is set, or as the AI's fallback. */
 export function basicReport(f: DailyFacts) {
@@ -64,6 +84,20 @@ export function basicReport(f: DailyFacts) {
     if (f.delivered.length) out.push(`• Delivered: ${f.delivered.join(", ")}`);
     if (f.lateOrders.length) out.push(`• Past ETA: ${f.lateOrders.join(", ")}`);
   }
+  if (f.expensesToday.length || f.approvalsWaiting.expenses || f.approvalsWaiting.bills) {
+    out.push("\n*Site costs*");
+    if (f.expensesToday.length) out.push(`• Expenses logged: ${f.expensesToday.slice(0, 6).join(", ")}`);
+    if (f.approvalsWaiting.expenses || f.approvalsWaiting.bills) out.push(`• Waiting for approval: ${f.approvalsWaiting.expenses} expense(s), ${f.approvalsWaiting.bills} contractor bill(s)`);
+  }
+  if (f.snagsNew.length || f.snagsFixed) {
+    out.push(`\n*Snags* — ${f.snagsNew.length} new, ${f.snagsFixed} fixed`);
+    for (const x of f.snagsNew.slice(0, 5)) out.push(`• ${x}`);
+  }
+  if (f.amcDue.length || f.warrantiesEnding.length) {
+    out.push("\n*After-sales*");
+    if (f.amcDue.length) out.push(`• Maintenance visit due: ${f.amcDue.join(", ")}`);
+    if (f.warrantiesEnding.length) out.push(`• Warranties ending within 30 days: ${f.warrantiesEnding.join(", ")}`);
+  }
   if (f.newLeads.length || f.followUps.length) {
     out.push("\n*Sales*");
     if (f.newLeads.length) out.push(`• New leads: ${f.newLeads.join(", ")}`);
@@ -78,7 +112,7 @@ async function aiReport(f: DailyFacts) {
     model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
     max_tokens: 1200,
     system:
-      "You write the evening operations summary for the owner of Zukhti Home, a turnkey interior design firm. Use only the JSON facts given. WhatsApp formatting (*bold*, • bullets), under 220 words. Order: one-line headline, what moved on site per project, issues needing a decision, money in, procurement, sales. Skip empty sections. No invented numbers, no pleasantries.",
+      "You write the evening operations summary for the owner of Zukhti Home, a turnkey interior design firm. Use only the JSON facts given. WhatsApp formatting (*bold*, • bullets), under 220 words. Order: one-line headline, what moved on site per project, issues needing a decision, money in, site costs and approvals waiting, snags, procurement, after-sales, sales. Skip empty sections. No invented numbers, no pleasantries.",
     messages: [{ role: "user", content: JSON.stringify(f) }],
   });
   const text = res.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
@@ -91,7 +125,7 @@ export async function buildDailyReport(now = new Date()) {
   const facts = await collectFacts(now);
   let body = basicReport(facts);
   let ai = false;
-  if (process.env.ANTHROPIC_API_KEY && (facts.updates.length || facts.payments.length || facts.newLeads.length)) {
+  if (process.env.ANTHROPIC_API_KEY && (facts.updates.length || facts.payments.length || facts.newLeads.length || facts.expensesToday.length || facts.snagsNew.length)) {
     try {
       body = await aiReport(facts);
       ai = true;
@@ -124,6 +158,22 @@ export async function sendDailyReport(body: string) {
     } catch (e) {
       results.push({ name: p.name, note: `failed: ${(e as Error).message}`.slice(0, 160) });
     }
+  }
+  return results;
+}
+
+/** On the maintenance (AMC) date, remind the client once and roll the date forward a year. */
+export async function sendAmcReminders(appUrl: string, now = new Date()) {
+  const due = await db.query.projects.findMany({ where: and(eq(projects.status, "HANDED_OVER"), lte(projects.amcDueAt, now)), with: { client: true } });
+  const results: { project: string; note: string }[] = [];
+  for (const p of due) {
+    if (!p.amcDueAt || (p.amcRemindedAt && p.amcRemindedAt >= p.amcDueAt)) continue;
+    const text = `Hi ${p.client.name.split(" ")[0]}, it's been a while since we handed over ${p.name}. Time for a free maintenance check — hinges, channels, polish touch-ups and anything else that needs attention. Reply with a day and time that suits you, and we'll send the team. — Zukhti Home`;
+    const res = await notifyClient(p.client, text, [], appUrl);
+    const next = new Date(p.amcDueAt);
+    next.setFullYear(next.getFullYear() + 1);
+    await db.update(projects).set({ amcRemindedAt: now, amcDueAt: next }).where(eq(projects.id, p.id));
+    results.push({ project: p.name, note: res.note });
   }
   return results;
 }

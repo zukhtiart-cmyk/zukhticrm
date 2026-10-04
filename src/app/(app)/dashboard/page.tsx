@@ -4,6 +4,7 @@ import { dailyReports, db, offices } from "@/db";
 import { generateDailyReport } from "./actions";
 import { requireUser } from "@/lib/auth";
 import { dashboardData } from "@/lib/dashboard";
+import { pendingApprovals } from "@/lib/site-ops";
 import { date, dateTime, money, titleCase } from "@/lib/format";
 import { Badge, Empty, PageHeader, ProgressBar, Section, Stat } from "@/components/ui";
 
@@ -12,13 +13,14 @@ export const metadata = { title: "Dashboard" };
 const lakh = (n: number) => (n >= 1e7 ? `₹${(n / 1e7).toFixed(2)} Cr` : `₹${(n / 1e5).toFixed(1)} L`);
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ office?: string }> }) {
-  await requireUser("admin");
+  const user = await requireUser("admin");
   const { office } = await searchParams;
   const [d, officeRows, report] = await Promise.all([
     dashboardData(office || undefined),
     db.select().from(offices).orderBy(asc(offices.createdAt)),
     db.query.dailyReports.findFirst({ orderBy: desc(dailyReports.day) }),
   ]);
+  const approvals = await pendingApprovals(user);
   const t = d.totals;
   const maxLead = Math.max(1, ...d.pipeline.map((p) => p.count));
 
@@ -46,7 +48,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Stat label="Open leads" value={t.openLeads} hint={`${t.wonLast30} won in 30 days`} />
         <Stat label="Quotes awaiting yes" value={lakh(t.sentQuotesInr)} />
         <Stat label="Orders past ETA" value={t.lateOrders} />
-        <Stat label="Needs attention" value={d.attention.length} />
+        <Stat label="Approvals waiting" value={<Link href="/desk/expenses">{approvals}</Link>} hint="site expenses + contractor bills" />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">

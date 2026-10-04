@@ -13,15 +13,23 @@ export type Capability =
   | "rates"
   | "admin"
   | "voice"
-  | "inbox";
+  | "inbox"
+  /** log site expenses */
+  | "expenses"
+  /** approve expenses, approve and pay contractor bills */
+  | "approve"
+  /** contractors, work orders, submit bills */
+  | "contractors"
+  /** snag list and handover */
+  | "snags";
 
 const matrix: Record<Role, Capability[]> = {
-  OWNER: ["leads", "projects.view", "projects.edit", "boq", "payments", "orders", "visits", "stages", "design", "rates", "admin", "voice", "inbox"],
-  ADMIN: ["leads", "projects.view", "projects.edit", "boq", "payments", "orders", "visits", "stages", "design", "rates", "admin", "voice", "inbox"],
-  DESIGNER: ["leads", "projects.view", "boq", "design", "visits", "rates", "voice", "inbox"],
-  SUPERVISOR: ["projects.view", "stages", "visits", "voice"],
-  PROCUREMENT: ["projects.view", "orders", "rates", "voice"],
-  ACCOUNTS: ["projects.view", "payments", "voice"],
+  OWNER: ["leads", "projects.view", "projects.edit", "boq", "payments", "orders", "visits", "stages", "design", "rates", "admin", "voice", "inbox", "expenses", "approve", "contractors", "snags"],
+  ADMIN: ["leads", "projects.view", "projects.edit", "boq", "payments", "orders", "visits", "stages", "design", "rates", "admin", "voice", "inbox", "expenses", "approve", "contractors", "snags"],
+  DESIGNER: ["leads", "projects.view", "boq", "design", "visits", "rates", "voice", "inbox", "expenses", "snags"],
+  SUPERVISOR: ["projects.view", "stages", "visits", "voice", "expenses", "contractors", "snags"],
+  PROCUREMENT: ["projects.view", "orders", "rates", "voice", "expenses"],
+  ACCOUNTS: ["projects.view", "payments", "voice", "expenses", "approve", "contractors"],
 };
 
 export function can(role: Role, capability: Capability) {

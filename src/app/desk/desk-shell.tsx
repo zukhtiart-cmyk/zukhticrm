@@ -5,10 +5,13 @@ import { can, isDeskOnly, roleLabels } from "@/lib/permissions";
 import { deskLogout } from "@/app/login/actions";
 
 /** Shared header for the Voice Desk app; `wide` for table screens like procurement. */
-export function DeskShell({ user, wide, active, children }: { user: CurrentUser; wide?: boolean; active: "updates" | "procurement"; children: React.ReactNode }) {
+export function DeskShell({ user, wide, active, children }: { user: CurrentUser; wide?: boolean; active: "updates" | "procurement" | "expenses" | "contractors" | "snags"; children: React.ReactNode }) {
   const width = wide ? "max-w-5xl" : "max-w-lg";
   const tabs = [
     { href: "/desk", label: "Updates", key: "updates" },
+    ...(can(user.role, "expenses") ? [{ href: "/desk/expenses", label: "Expenses", key: "expenses" }] : []),
+    ...(can(user.role, "contractors") ? [{ href: "/desk/contractors", label: "Contractors", key: "contractors" }] : []),
+    ...(can(user.role, "snags") ? [{ href: "/desk/snags", label: "Snags", key: "snags" }] : []),
     ...(can(user.role, "orders") ? [{ href: "/desk/procurement", label: "Procurement", key: "procurement" }] : []),
   ];
   return (
@@ -36,9 +39,9 @@ export function DeskShell({ user, wide, active, children }: { user: CurrentUser;
           </div>
         </div>
         {tabs.length > 1 && (
-          <nav className={`mx-auto flex ${width} gap-1 px-4`}>
+          <nav className={`mx-auto flex ${width} gap-1 overflow-x-auto px-4`}>
             {tabs.map((t) => (
-              <Link key={t.key} href={t.href} className={`border-b-2 px-3 py-2 text-sm font-semibold ${active === t.key ? "border-ink text-ink" : "border-transparent text-muted"}`}>
+              <Link key={t.key} href={t.href} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold ${active === t.key ? "border-ink text-ink" : "border-transparent text-muted"}`}>
                 {t.label}
               </Link>
             ))}

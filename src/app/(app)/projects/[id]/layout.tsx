@@ -14,6 +14,8 @@ export default async function ProjectLayout({ children, params }: { children: Re
     ...(can(user.role, "boq") ? [{ slug: "boq", label: "BOQ & quotes" }] : []),
     ...(can(user.role, "payments") || can(user.role, "boq") ? [{ slug: "payments", label: "Payments" }] : []),
     { slug: "orders", label: "Orders" },
+    ...(can(user.role, "boq") || can(user.role, "approve") ? [{ slug: "costs", label: "Site costs" }] : []),
+    ...(can(user.role, "snags") ? [{ slug: "handover", label: "Snags & handover" }] : []),
   ];
   return (
     <>

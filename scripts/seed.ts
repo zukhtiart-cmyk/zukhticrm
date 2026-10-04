@@ -5,7 +5,7 @@
  */
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { db, clients, designs, vendors, leads, leadActivities, offices, orders, projects, rateItems, siteUpdates, stages, users, visits, boqItems, milestones } from "../src/db";
+import { db, clients, contractorBills, contractors, siteExpenses, snags, warranties, workOrders, designs, vendors, leads, leadActivities, offices, orders, projects, rateItems, siteUpdates, stages, users, visits, boqItems, milestones } from "../src/db";
 import { createProjectWithDefaults, recomputeProjectProgress, syncMilestoneAmounts } from "../src/lib/projects";
 
 const PASSWORD = "zukhti123";
@@ -149,6 +149,51 @@ async function main() {
   await db.insert(siteUpdates).values([
     { projectId: project.id, stageId: byName("False ceiling").id, authorId: supervisor.id, summary: "False ceiling completed in all rooms, cove lights wired.", clientMessage: "Hi Arjun, the false ceiling is now complete in all rooms and the cove lights are wired. Carpentry starts this week!", sentToClient: true, sendStatus: "demo", createdAt: days(-10) },
     { projectId: project.id, stageId: byName("Carpentry").id, authorId: supervisor.id, summary: "Kitchen and wardrobe carcasses installed; laminate work starts Monday.", issues: "Hinges for kids wardrobe pending from vendor", createdAt: days(-1) },
+  ]);
+
+  // Site costs: contractors, work orders with running bills, cash expenses
+  const [ramesh, sunil] = await db
+    .insert(contractors)
+    .values([
+      { name: "Ramesh Carpentry Works", trade: "Carpenter", phone: "+919820055501", officeId: mumbai.id, rateNotes: "Wardrobe ₹450/sqft labour · kitchen ₹900/rft", bankDetails: "UPI rameshcw@okicici" },
+      { name: "Sunil Painting Contractors", trade: "Painter", phone: "+919820055502", officeId: mumbai.id, rateNotes: "Royale emulsion ₹28/sqft incl. putty" },
+      { name: "Bright Electricals", trade: "Electrician", phone: "+919820055503", officeId: mumbai.id },
+    ])
+    .returning();
+  const [woCarp] = await db
+    .insert(workOrders)
+    .values([
+      { number: `WO-${new Date().getFullYear()}-0001`, projectId: project.id, contractorId: ramesh.id, stageId: byName("Carpentry").id, title: "Wardrobes, kitchen & TV unit — labour", scope: "3 wardrobes (7×8 ft), L-kitchen 14 rft, TV unit. Material by Zukhti. 35 working days.", amount: 185000, currency: "INR", createdById: supervisor.id, createdAt: days(-30) },
+      { number: `WO-${new Date().getFullYear()}-0002`, projectId: project.id, contractorId: sunil.id, stageId: byName("Painting & finishes").id, title: "Full house painting", scope: "Putty, primer, 2 coats Royale. Approx 4200 sqft.", amount: 118000, currency: "INR", createdById: supervisor.id, createdAt: days(-5) },
+    ])
+    .returning();
+  await db.insert(contractorBills).values([
+    { workOrderId: woCarp.id, amount: 60000, note: "RA1 — carcasses for 3 wardrobes", status: "PAID", submittedById: supervisor.id, paidAt: days(-12), reference: "UTR 4413", createdAt: days(-14) },
+    { workOrderId: woCarp.id, amount: 45000, note: "RA2 — kitchen carcass and shutters", status: "PENDING", submittedById: supervisor.id, createdAt: days(-1) },
+  ]);
+  await db.insert(siteExpenses).values([
+    { projectId: project.id, category: "Material", description: "20 bags white cement + tile adhesive", paidTo: "Kurla Hardware", amount: 8400, currency: "INR", status: "APPROVED", submittedById: supervisor.id, reviewedById: people[5].id, reviewedAt: days(-6), spentOn: days(-7) },
+    { projectId: project.id, category: "Transport", description: "Tempo — laminate sheets from godown", paidTo: "Raju tempo", amount: 1800, currency: "INR", status: "PENDING", submittedById: supervisor.id, spentOn: days(-1) },
+    { projectId: project.id, category: "Tools & consumables", description: "Drill bits, screws, fevicol", amount: 2350, currency: "INR", status: "PENDING", submittedById: supervisor.id, spentOn: days(0) },
+  ]);
+  await db.insert(snags).values([
+    { projectId: project.id, room: "Kitchen", description: "Corner carousel shutter rubbing against the hob panel", contractorId: ramesh.id, createdById: supervisor.id },
+    { projectId: project.id, room: "Master bedroom", description: "Cove light flickering on the window side", createdById: designer.id },
+  ]);
+
+  // A finished project — handover pack, warranties and maintenance reminder
+  const [mehta] = await db.insert(clients).values({ name: "Neha Mehta", phone: "+919820022222", officeId: mumbai.id }).returning();
+  const done = await createProjectWithDefaults(db, { name: "Mehta apartment, Powai", clientId: mehta.id, officeId: mumbai.id, managerId: designer.id, siteAddress: "Hiranandani Gardens, Powai", expectedHandover: days(-20) });
+  await db.update(stages).set({ status: "DONE", progress: 100 }).where(eq(stages.projectId, done.id));
+  await db.update(projects).set({ status: "HANDED_OVER", progress: 100, startDate: days(-140), handedOverAt: days(-20), amcDueAt: days(345) }).where(eq(projects.id, done.id));
+  await db.insert(warranties).values([
+    { projectId: done.id, item: "Hob & chimney", brand: "Faber", months: 24, startsOn: days(-20), notes: "Register on faberindia.com with the invoice" },
+    { projectId: done.id, item: "Soft-close hinges & channels", brand: "Hettich", months: 120, startsOn: days(-20) },
+    { projectId: done.id, item: "Workmanship (carpentry & ceiling)", brand: "Zukhti Home", months: 12, startsOn: days(-20) },
+  ]);
+  await db.insert(snags).values([
+    { projectId: done.id, room: "Living", description: "Paint touch-up near TV unit", status: "VERIFIED", fixedAt: days(-22), verifiedAt: days(-21), createdById: supervisor.id, createdAt: days(-25) },
+    { projectId: done.id, room: "Kids bedroom", description: "Study table drawer is stiff", fromClient: true, createdAt: days(-2) },
   ]);
 
   // A Dubai project in design

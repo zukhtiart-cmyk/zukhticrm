@@ -31,6 +31,10 @@ export const designStatusEnum = pgEnum("design_status", ["DRAFT", "PENDING", "AP
 export const waDirectionEnum = pgEnum("wa_direction", ["IN", "OUT"]);
 export const waStatusEnum = pgEnum("wa_status", ["RECEIVED", "AUTO_REPLIED", "NEEDS_HUMAN", "PENDING_APPROVAL", "SENT", "QUEUED", "FAILED", "DISCARDED"]);
 
+export const approvalStatusEnum = pgEnum("approval_status", ["PENDING", "APPROVED", "REJECTED", "PAID"]);
+export const workOrderStatusEnum = pgEnum("work_order_status", ["OPEN", "DONE", "CANCELLED"]);
+export const snagStatusEnum = pgEnum("snag_status", ["OPEN", "FIXED", "VERIFIED"]);
+
 export type Role = (typeof roleEnum.enumValues)[number];
 export type LeadStatus = (typeof leadStatusEnum.enumValues)[number];
 export type StageStatus = (typeof stageStatusEnum.enumValues)[number];
@@ -129,6 +133,11 @@ export const projects = pgTable("projects", {
   /** Site location, for suggesting the nearest project on the Voice Desk. */
   siteLat: doublePrecision("site_lat"),
   siteLng: doublePrecision("site_lng"),
+  /** Handover: set when marked handed over; AMC reminder goes to the client on amcDueAt. */
+  handedOverAt: timestamp("handed_over_at", { withTimezone: true }),
+  amcDueAt: timestamp("amc_due_at", { withTimezone: true }),
+  amcRemindedAt: timestamp("amc_reminded_at", { withTimezone: true }),
+  careNotes: text("care_notes"),
   createdAt: created(),
 });
 
@@ -377,6 +386,117 @@ export const settings = pgTable("app_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Cash spent on site (material top-ups, transport, tools, small labour) — submitted from the desk, approved by accounts. */
+export const siteExpenses = pgTable("site_expenses", {
+  id: id(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  stageId: text("stage_id").references(() => stages.id, { onDelete: "set null" }),
+  category: text("category").notNull().default("Material"),
+  description: text("description").notNull(),
+  paidTo: text("paid_to"),
+  amount: money("amount").notNull(),
+  /** Always the project office's currency. */
+  currency: text("currency").notNull(),
+  billUrl: text("bill_url"),
+  spentOn: timestamp("spent_on", { withTimezone: true }).notNull().defaultNow(),
+  status: approvalStatusEnum("status").notNull().default("PENDING"),
+  submittedById: text("submitted_by_id")
+    .notNull()
+    .references(() => users.id),
+  reviewedById: text("reviewed_by_id").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  reviewNote: text("review_note"),
+  createdAt: created(),
+});
+
+/** Carpenters, painters, electricians and other site contractors. */
+export const contractors = pgTable("contractors", {
+  id: id(),
+  name: text("name").notNull(),
+  trade: text("trade").notNull(),
+  phone: text("phone"),
+  officeId: text("office_id").references(() => offices.id),
+  rateNotes: text("rate_notes"),
+  bankDetails: text("bank_details"),
+  active: boolean("active").notNull().default(true),
+  createdAt: created(),
+});
+
+/** Agreed scope and value for one contractor on one project. */
+export const workOrders = pgTable("work_orders", {
+  id: id(),
+  number: text("number").notNull().unique(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  contractorId: text("contractor_id")
+    .notNull()
+    .references(() => contractors.id),
+  stageId: text("stage_id").references(() => stages.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  scope: text("scope"),
+  amount: money("amount").notNull(),
+  currency: text("currency").notNull(),
+  status: workOrderStatusEnum("status").notNull().default("OPEN"),
+  createdById: text("created_by_id").references(() => users.id),
+  createdAt: created(),
+});
+
+/** Running bills against a work order: submitted → approved → paid. */
+export const contractorBills = pgTable("contractor_bills", {
+  id: id(),
+  workOrderId: text("work_order_id")
+    .notNull()
+    .references(() => workOrders.id, { onDelete: "cascade" }),
+  amount: money("amount").notNull(),
+  note: text("note"),
+  billUrl: text("bill_url"),
+  status: approvalStatusEnum("status").notNull().default("PENDING"),
+  submittedById: text("submitted_by_id").references(() => users.id),
+  reviewedById: text("reviewed_by_id").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  reference: text("reference"),
+  createdAt: created(),
+});
+
+/** Punch-list items before (and after) handover. */
+export const snags = pgTable("snags", {
+  id: id(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  room: text("room").notNull().default("General"),
+  description: text("description").notNull(),
+  photoUrl: text("photo_url"),
+  fixedPhotoUrl: text("fixed_photo_url"),
+  contractorId: text("contractor_id").references(() => contractors.id, { onDelete: "set null" }),
+  status: snagStatusEnum("status").notNull().default("OPEN"),
+  /** Raised by the client from the portal. */
+  fromClient: boolean("from_client").notNull().default(false),
+  createdById: text("created_by_id").references(() => users.id),
+  fixedAt: timestamp("fixed_at", { withTimezone: true }),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  createdAt: created(),
+});
+
+/** Warranties handed to the client (appliances, hardware, waterproofing…). */
+export const warranties = pgTable("warranties", {
+  id: id(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  item: text("item").notNull(),
+  brand: text("brand"),
+  months: integer("months").notNull().default(12),
+  startsOn: timestamp("starts_on", { withTimezone: true }),
+  docUrl: text("doc_url"),
+  notes: text("notes"),
+  createdAt: created(),
+});
+
 // Relations
 export const officesRelations = relations(offices, ({ many }) => ({ users: many(users), projects: many(projects) }));
 export const usersRelations = relations(users, ({ one }) => ({ office: one(offices, { fields: [users.officeId], references: [offices.id] }) }));
@@ -407,6 +527,10 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   orders: many(orders),
   visits: many(visits),
   designs: many(designs),
+  expenses: many(siteExpenses),
+  workOrders: many(workOrders),
+  snags: many(snags),
+  warranties: many(warranties),
 }));
 export const stagesRelations = relations(stages, ({ one }) => ({ project: one(projects, { fields: [stages.projectId], references: [projects.id] }) }));
 export const siteUpdatesRelations = relations(siteUpdates, ({ one, many }) => ({
@@ -449,3 +573,29 @@ export const waMessagesRelations = relations(waMessages, ({ one }) => ({
   conversation: one(conversations, { fields: [waMessages.conversationId], references: [conversations.id] }),
   author: one(users, { fields: [waMessages.authorId], references: [users.id] }),
 }));
+export const siteExpensesRelations = relations(siteExpenses, ({ one }) => ({
+  project: one(projects, { fields: [siteExpenses.projectId], references: [projects.id] }),
+  stage: one(stages, { fields: [siteExpenses.stageId], references: [stages.id] }),
+  submittedBy: one(users, { fields: [siteExpenses.submittedById], references: [users.id] }),
+  reviewedBy: one(users, { fields: [siteExpenses.reviewedById], references: [users.id] }),
+}));
+export const contractorsRelations = relations(contractors, ({ one, many }) => ({
+  office: one(offices, { fields: [contractors.officeId], references: [offices.id] }),
+  workOrders: many(workOrders),
+}));
+export const workOrdersRelations = relations(workOrders, ({ one, many }) => ({
+  project: one(projects, { fields: [workOrders.projectId], references: [projects.id] }),
+  contractor: one(contractors, { fields: [workOrders.contractorId], references: [contractors.id] }),
+  stage: one(stages, { fields: [workOrders.stageId], references: [stages.id] }),
+  bills: many(contractorBills),
+}));
+export const contractorBillsRelations = relations(contractorBills, ({ one }) => ({
+  workOrder: one(workOrders, { fields: [contractorBills.workOrderId], references: [workOrders.id] }),
+  submittedBy: one(users, { fields: [contractorBills.submittedById], references: [users.id] }),
+}));
+export const snagsRelations = relations(snags, ({ one }) => ({
+  project: one(projects, { fields: [snags.projectId], references: [projects.id] }),
+  contractor: one(contractors, { fields: [snags.contractorId], references: [contractors.id] }),
+  createdBy: one(users, { fields: [snags.createdById], references: [users.id] }),
+}));
+export const warrantiesRelations = relations(warranties, ({ one }) => ({ project: one(projects, { fields: [warranties.projectId], references: [projects.id] }) }));

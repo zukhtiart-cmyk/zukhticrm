@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, gte, inArray, isNotNull, ne } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import { clients, db, designs, milestones, photos, projects, quotes, siteUpdates, stages, visits } from "@/db";
+import { clients, db, designs, milestones, photos, projects, quotes, siteUpdates, snags, stages, visits, warranties } from "@/db";
 
 /**
  * Everything the client portal shows comes through here, so internal data
@@ -34,8 +34,11 @@ export async function loadPortalProject(token: string, projectId: string | undef
 
   const project = await db.query.projects.findFirst({
     where: and(eq(projects.id, id), eq(projects.clientId, client.id)),
-    columns: { id: true, name: true, code: true, siteAddress: true, progress: true, status: true, expectedHandover: true },
+    columns: { id: true, name: true, code: true, siteAddress: true, progress: true, status: true, expectedHandover: true, handedOverAt: true, amcDueAt: true, careNotes: true },
     with: {
+      // Snags: no internal assignee/contractor details.
+      snags: { columns: { id: true, room: true, description: true, status: true, photoUrl: true, fixedPhotoUrl: true, fromClient: true, createdAt: true }, orderBy: [asc(snags.room), asc(snags.createdAt)] },
+      warranties: { columns: { id: true, item: true, brand: true, months: true, startsOn: true, docUrl: true, notes: true }, orderBy: asc(warranties.item) },
       client: { columns: { name: true, phone: true, email: true } },
       office: { columns: { name: true, city: true, currency: true, taxLabel: true, taxRate: true } },
       manager: { columns: { name: true, phone: true } },

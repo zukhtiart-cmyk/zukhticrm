@@ -51,6 +51,13 @@ const statusTone: Record<string, keyof typeof tones> = {
   DRAFT: "neutral",
   SENT: "sky",
   ACCEPTED: "olive",
+  APPROVED: "sky",
+  REJECTED: "clay",
+  OPEN: "brass",
+  FIXED: "sky",
+  VERIFIED: "olive",
+  CANCELLED: "neutral",
+  REIMBURSED: "olive",
 };
 
 export function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: keyof typeof tones }) {

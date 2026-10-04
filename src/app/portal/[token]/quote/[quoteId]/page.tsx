@@ -4,7 +4,11 @@ import { QuoteDocument } from "@/components/documents";
 import { PrintButton } from "@/components/print-button";
 import { loadPortalClient, loadPortalProject } from "@/lib/portal-data";
 
-export default async function PortalQuote({ params }: { params: Promise<{ token: string; quoteId: string }> }) {
+export default async function PortalQuote({
+  params,
+}: {
+  params: Promise<{ token: string; quoteId: string }>;
+}) {
   const { token, quoteId } = await params;
   const client = await loadPortalClient(token);
   for (const p of client.projects) {
@@ -14,12 +18,19 @@ export default async function PortalQuote({ params }: { params: Promise<{ token:
       return (
         <>
           <div className="no-print mb-4 flex items-center justify-between">
-            <Link href={`/portal/${token}?p=${project.id}#documents`} className="text-sm font-semibold text-muted">
+            <Link
+              href={`/portal/${token}?p=${project.id}#documents`}
+              className="text-sm font-semibold text-muted"
+            >
               ← Back
             </Link>
             <PrintButton />
           </div>
-          <QuoteDocument project={project} quote={quote} schedule={project.milestones} />
+          <QuoteDocument
+            project={project}
+            quote={quote}
+            schedule={project.milestones}
+          />
         </>
       );
     }

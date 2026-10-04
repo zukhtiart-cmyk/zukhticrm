@@ -6,14 +6,14 @@ import { officeScope } from "@/lib/permissions";
 
 /**
  * Serves files from a private Blob store.
- * Paths look like photos/<projectId>/…, designs/<projectId>/…, voice/<projectId>/….
+ * Paths look like photos/<projectId>/…, designs/<projectId>/…, voice/<projectId>/…, bills/<projectId>/…, handover/<projectId>/….
  * Allowed for signed-in staff who can see that project, or a client portal link (?t=) for the same project.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
   const pathname = path.map(decodeURIComponent).join("/");
   const [kind, projectId] = path;
-  if (!["photos", "designs", "voice"].includes(kind) || !projectId || pathname.includes("..")) return new Response("Not found", { status: 404 });
+  if (!["photos", "designs", "voice", "bills", "handover"].includes(kind) || !projectId || pathname.includes("..")) return new Response("Not found", { status: 404 });
 
   let allowed = false;
   const session = await getSession();
@@ -25,7 +25,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
     }
   }
   const token = new URL(req.url).searchParams.get("t");
-  if (!allowed && token && kind !== "voice") {
+  // Voice notes and bills are staff-only; never reachable with a portal link.
+  if (!allowed && token && kind !== "voice" && kind !== "bills") {
     const client = await db.query.clients.findFirst({ where: eq(clients.portalToken, token), columns: { id: true } });
     if (client) allowed = !!(await db.query.projects.findFirst({ where: and(eq(projects.id, projectId), eq(projects.clientId, client.id)), columns: { id: true } }));
   }
