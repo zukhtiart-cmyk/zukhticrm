@@ -1,15 +1,18 @@
 import { requireUser } from "@/lib/auth";
-import { can, roleLabels } from "@/lib/permissions";
+import { can, isDeskOnly, roleLabels } from "@/lib/permissions";
+import { redirect } from "next/navigation";
 import { Sidebar, type NavItem } from "@/components/nav";
 import { logout } from "@/app/login/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  // Site supervisors, procurement and accounts work only on the Voice Desk.
+  if (isDeskOnly(user.role)) redirect("/desk");
   const items: NavItem[] = [
     { href: "/", label: "Today", icon: "home" },
     ...(can(user.role, "leads") ? [{ href: "/leads", label: "Leads", icon: "leads" } as NavItem] : []),
     { href: "/projects", label: "Projects", icon: "projects" },
-    { href: "/voice", label: "Voice desk", icon: "voice" },
+    { href: "/desk", label: "Voice desk", icon: "voice" },
     ...(can(user.role, "rates") ? [{ href: "/rates", label: "Rates", icon: "rates" } as NavItem] : []),
     ...(can(user.role, "admin") ? [{ href: "/admin", label: "Team", icon: "admin" } as NavItem] : []),
   ];

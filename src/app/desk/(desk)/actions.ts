@@ -13,6 +13,7 @@ export async function confirmVoiceUpdate(input: ConfirmInput) {
   if (res.ok) {
     revalidatePath(`/projects/${res.projectId}`, "layout");
     revalidatePath("/");
+    revalidatePath("/desk");
   }
   return res;
 }

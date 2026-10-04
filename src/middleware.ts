@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
-const PUBLIC = ["/login", "/setup", "/portal", "/_next", "/favicon", "/uploads"];
+const PUBLIC = ["/login", "/desk/login", "/setup", "/portal", "/_next", "/favicon", "/uploads"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -11,7 +11,7 @@ export async function middleware(req: NextRequest) {
   if (!session) {
     if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     const url = req.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = pathname.startsWith("/desk") ? "/desk/login" : "/login";
     url.search = "";
     return NextResponse.redirect(url);
   }

@@ -22,14 +22,29 @@ Built with Next.js 15, Postgres (Drizzle ORM) and Tailwind. It's designed to run
 | **Invoices** | Issue numbered invoices from payment milestones, numbered per office and year, e.g. `MUM-2026-0007`. Each invoice is printable and shows the taxable value and GST or VAT separately. |
 | **Client portal** | See below. |
 
-### Voice update desk (`/voice`)
+### Voice Desk (`/desk`)
 
+The Voice Desk is a separate, phone-friendly app with its own sign-in page at **`/desk/login`**. Save it to your phone's home screen.
+
+- **Site supervisors, procurement and accounts** use only the Voice Desk. If they open the CRM, they're sent to the desk.
+- **Owner, admin and designers** keep the full CRM and can open the desk from it.
+- Each role is shown what it records and a snapshot of the project before speaking:
+
+| Role | Records | Sees before speaking |
+| --- | --- | --- |
+| Site supervisor | Stage progress, work done, issues, photos | Stage list with % |
+| Designer | Design approvals and changes, visits and meetings | Stage list with % |
+| Procurement | Orders and deliveries, with dates (all offices) | Orders with status and ETA |
+| Accounts | Payments received against milestones | Payment schedule and what's paid |
+| Owner / admin | Everything | Everything |
+
+How an update works:
 1. Pick the project and tap the mic. Speak in English, Hindi, Hinglish or Arabic, or type.
 2. Add photos with the camera or from the gallery. They're shrunk on the phone before upload.
-3. The AI turns the update into stage progress, payments, orders, visits, design notes and issues. It only uses the speaker's role permissions, e.g. accounts can record payments but not change stages.
+3. The AI turns the update into structured changes, using only the speaker's role permissions.
 4. A review card shows exactly what will be saved. Edit or remove anything, and answer any clarifying question.
-5. **Send-to-client toggle**: the AI drafts a friendly client message in the client's language. You choose which photos to share and can edit the text. It's on by default for site, design and admin, and off for procurement and accounts.
-6. Confirm. Stages, project %, payments, orders and visits update, and the update appears on the project timeline with photos, transcript and the original voice note.
+5. **Send-to-client toggle**: the AI drafts a friendly client message in the client's language. You choose the photos and can edit the text. It's on by default for site, design and admin, and off for procurement and accounts.
+6. Confirm. The project updates, and the desk shows **My recent updates**.
 
 Without AI keys, the desk runs in **basic mode**: typed updates work, and stage percentages are picked up from keywords.
 

@@ -75,7 +75,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PageHeader title={`Hello, ${user.name.split(" ")[0]}`} subtitle={new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} actions={<Link href="/voice" className="btn-brass">Voice update</Link>} />
+      <PageHeader title={`Hello, ${user.name.split(" ")[0]}`} subtitle={new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} actions={<Link href="/desk" className="btn-brass">Voice update</Link>} />
       {denied && <p className="mb-4 rounded-xl bg-clay-soft px-4 py-2 text-sm text-clay">Your role doesn&apos;t have access to that page.</p>}
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">

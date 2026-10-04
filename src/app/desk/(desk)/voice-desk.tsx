@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Camera, Check, ImagePlus, Loader2, Mic, RotateCcw, Send, Square, X } from "lucide-react";
 import type { UnderstandResult, VoiceProposal } from "@/lib/voice-types";
@@ -9,6 +8,63 @@ import { confirmVoiceUpdate } from "./actions";
 type ProjectOption = { id: string; name: string; client: string; code: string };
 type Perms = { stages: boolean; payments: boolean; orders: boolean; visits: boolean; design: boolean };
 type Photo = { key: string; preview: string; url?: string; error?: string; clientVisible: boolean };
+export type ProjectSnapshot = {
+  progress: number;
+  currentStage: string;
+  stages: { name: string; status: string; progress: number }[];
+  orders: { item: string; status: string; eta: string | null }[];
+  milestones: { label: string; amount: number; status: string; currency: string }[];
+};
+
+const ORDER_LABEL: Record<string, string> = { ORDERED: "Ordered", IN_PRODUCTION: "In production", SHIPPED: "Shipped", CUSTOMS: "At customs", DELIVERED: "Delivered" };
+const shortDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "");
+
+function Snapshot({ s }: { s: ProjectSnapshot }) {
+  return (
+    <details className="mt-3 rounded-xl bg-ivory px-3 py-2 text-sm" open>
+      <summary className="cursor-pointer text-xs font-semibold text-muted">
+        Now: {s.currentStage} · overall {s.progress}%
+      </summary>
+      <div className="mt-2 grid gap-2">
+        {s.stages.length > 0 && (
+          <ul className="grid gap-1">
+            {s.stages.map((st) => (
+              <li key={st.name} className="flex justify-between gap-2 text-xs">
+                <span className={st.status === "NOT_STARTED" ? "text-muted" : ""}>{st.name}</span>
+                <span className={st.status === "DONE" ? "text-olive" : "text-muted"}>{st.status === "DONE" ? "Done" : st.status === "IN_PROGRESS" ? `${st.progress}%` : "—"}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {s.orders.length > 0 && (
+          <ul className="grid gap-1">
+            {s.orders.map((o) => (
+              <li key={o.item} className="flex justify-between gap-2 text-xs">
+                <span>{o.item}</span>
+                <span className="text-muted">
+                  {ORDER_LABEL[o.status] ?? o.status}
+                  {o.eta && o.status !== "DELIVERED" ? ` · ETA ${shortDate(o.eta)}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {s.milestones.length > 0 && (
+          <ul className="grid gap-1">
+            {s.milestones.map((m) => (
+              <li key={m.label} className="flex justify-between gap-2 text-xs">
+                <span>{m.label}</span>
+                <span className={m.status === "PAID" ? "text-olive" : "text-muted"}>
+                  {m.currency} {Math.round(m.amount).toLocaleString("en-IN")} · {m.status === "PAID" ? "paid" : m.status === "INVOICED" ? "invoiced" : "due later"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </details>
+  );
+}
 
 const STAGE_STATUSES = [
   ["NOT_STARTED", "Not started"],
@@ -44,7 +100,23 @@ function pickMime() {
   return "";
 }
 
-export function VoiceDesk({ projects, initialProjectId, defaultSend, whatsappReady, perms }: { projects: ProjectOption[]; initialProjectId: string; defaultSend: boolean; whatsappReady: boolean; perms: Perms }) {
+export function VoiceDesk({
+  projects,
+  snapshots,
+  initialProjectId,
+  defaultSend,
+  whatsappReady,
+  perms,
+  guide,
+}: {
+  projects: ProjectOption[];
+  snapshots: Record<string, ProjectSnapshot>;
+  initialProjectId: string;
+  defaultSend: boolean;
+  whatsappReady: boolean;
+  perms: Perms;
+  guide: { focus: string; example: string };
+}) {
   const [projectId, setProjectId] = useState(initialProjectId);
   const [step, setStep] = useState<"capture" | "review" | "done">("capture");
 
@@ -220,9 +292,6 @@ export function VoiceDesk({ projects, initialProjectId, defaultSend, whatsappRea
             <button onClick={reset} className="btn-brass">
               New update
             </button>
-            <Link href={`/projects/${projectId}`} className="btn-ghost">
-              Open project
-            </Link>
           </div>
         </div>
       </div>
@@ -437,8 +506,8 @@ export function VoiceDesk({ projects, initialProjectId, defaultSend, whatsappRea
   return (
     <div className="mx-auto grid max-w-lg gap-4">
       <div>
-        <h1 className="h-display text-3xl sm:text-4xl">Voice desk</h1>
-        <p className="text-sm text-muted">Speak the update in your own words, add photos, and check what gets saved.</p>
+        <h1 className="h-display text-3xl">New update</h1>
+        <p className="text-sm text-muted">You record: {guide.focus.charAt(0).toLowerCase() + guide.focus.slice(1)}.</p>
       </div>
 
       <div className="card p-4">
@@ -450,6 +519,7 @@ export function VoiceDesk({ projects, initialProjectId, defaultSend, whatsappRea
             </option>
           ))}
         </select>
+        {snapshots[projectId] && <Snapshot s={snapshots[projectId]} />}
       </div>
 
       <div className="card flex flex-col items-center p-6 text-center">
@@ -459,7 +529,7 @@ export function VoiceDesk({ projects, initialProjectId, defaultSend, whatsappRea
               <Mic size={44} />
             </button>
             <p className="mt-3 text-sm font-semibold">Tap and speak</p>
-            <p className="mt-1 max-w-xs text-xs text-muted">e.g. &ldquo;False ceiling done in living and bedroom, electrical 80%, waiting for switches&rdquo; — Hindi, English or Hinglish is fine</p>
+            <p className="mt-1 max-w-xs text-xs text-muted">e.g. &ldquo;{guide.example}&rdquo; — Hindi, English or Hinglish is fine</p>
           </>
         )}
         {recording && (

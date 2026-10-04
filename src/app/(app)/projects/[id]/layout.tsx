@@ -31,7 +31,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
             </span>
           }
           actions={
-            <Link href={`/voice?project=${project.id}`} className="btn-brass">
+            <Link href={`/desk?project=${project.id}`} className="btn-brass">
               Voice update
             </Link>
           }
