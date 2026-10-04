@@ -27,12 +27,15 @@ export const orderStatusEnum = pgEnum("order_status", ["ORDERED", "IN_PRODUCTION
 export const quoteStatusEnum = pgEnum("quote_status", ["DRAFT", "SENT", "ACCEPTED"]);
 export const updateSourceEnum = pgEnum("update_source", ["VOICE", "MANUAL"]);
 export const designStatusEnum = pgEnum("design_status", ["DRAFT", "PENDING", "APPROVED", "CHANGES_REQUESTED"]);
+export const waDirectionEnum = pgEnum("wa_direction", ["IN", "OUT"]);
+export const waStatusEnum = pgEnum("wa_status", ["RECEIVED", "AUTO_REPLIED", "NEEDS_HUMAN", "PENDING_APPROVAL", "SENT", "QUEUED", "FAILED", "DISCARDED"]);
 
 export type Role = (typeof roleEnum.enumValues)[number];
 export type LeadStatus = (typeof leadStatusEnum.enumValues)[number];
 export type StageStatus = (typeof stageStatusEnum.enumValues)[number];
 export type OrderStatus = (typeof orderStatusEnum.enumValues)[number];
 export type DesignStatus = (typeof designStatusEnum.enumValues)[number];
+export type WaStatus = (typeof waStatusEnum.enumValues)[number];
 
 export const offices = pgTable("offices", {
   id: id(),
@@ -285,6 +288,50 @@ export const designs = pgTable("designs", {
   createdAt: created(),
 });
 
+/** One WhatsApp conversation per phone number (client, lead or unknown). */
+export const conversations = pgTable("wa_conversations", {
+  id: id(),
+  /** Digits only, with country code, as WhatsApp sends it, e.g. 919820011111 */
+  phone: text("phone").notNull().unique(),
+  name: text("name"),
+  clientId: text("client_id").references(() => clients.id, { onDelete: "set null" }),
+  leadId: text("lead_id").references(() => leads.id, { onDelete: "set null" }),
+  activeProjectId: text("active_project_id").references(() => projects.id, { onDelete: "set null" }),
+  awaitingProjectChoice: boolean("awaiting_project_choice").notNull().default(false),
+  /** Set when handed to a person; the assistant stays quiet until staff resume it. */
+  aiPaused: boolean("ai_paused").notNull().default(false),
+  needsHuman: boolean("needs_human").notNull().default(false),
+  /** Free-form WhatsApp messages are only allowed within 24 hours of this. */
+  lastInboundAt: timestamp("last_inbound_at", { withTimezone: true }),
+  lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: created(),
+});
+
+export const waMessages = pgTable("wa_messages", {
+  id: id(),
+  conversationId: text("conversation_id")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  direction: waDirectionEnum("direction").notNull(),
+  /** WhatsApp's message id; unique so a retried webhook is processed once. */
+  waMessageId: text("wa_message_id").unique(),
+  kind: text("kind").notNull().default("text"),
+  body: text("body").notNull().default(""),
+  mediaUrl: text("media_url"),
+  intent: text("intent"),
+  status: waStatusEnum("status").notNull(),
+  authorId: text("author_id").references(() => users.id, { onDelete: "set null" }),
+  error: text("error"),
+  createdAt: created(),
+});
+
+/** Small key/value store for app settings (WhatsApp mode, weekly summaries…). */
+export const settings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Relations
 export const officesRelations = relations(offices, ({ many }) => ({ users: many(users), projects: many(projects) }));
 export const usersRelations = relations(users, ({ one }) => ({ office: one(offices, { fields: [users.officeId], references: [offices.id] }) }));
@@ -338,4 +385,14 @@ export const visitsRelations = relations(visits, ({ one }) => ({ project: one(pr
 export const designsRelations = relations(designs, ({ one }) => ({
   project: one(projects, { fields: [designs.projectId], references: [projects.id] }),
   uploadedBy: one(users, { fields: [designs.uploadedById], references: [users.id] }),
+}));
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  client: one(clients, { fields: [conversations.clientId], references: [clients.id] }),
+  lead: one(leads, { fields: [conversations.leadId], references: [leads.id] }),
+  activeProject: one(projects, { fields: [conversations.activeProjectId], references: [projects.id] }),
+  messages: many(waMessages),
+}));
+export const waMessagesRelations = relations(waMessages, ({ one }) => ({
+  conversation: one(conversations, { fields: [waMessages.conversationId], references: [conversations.id] }),
+  author: one(users, { fields: [waMessages.authorId], references: [users.id] }),
 }));

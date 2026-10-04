@@ -7,7 +7,7 @@ import type { Role } from "@/db/schema";
 import { can } from "@/lib/permissions";
 import { money } from "@/lib/format";
 import { recomputeProjectProgress } from "@/lib/projects";
-import { sendClientUpdate } from "@/lib/whatsapp";
+import { notifyClient } from "@/lib/wa-conversations";
 import { officeTimeZone } from "@/lib/voice-context";
 
 export const confirmSchema = z.object({
@@ -138,15 +138,17 @@ export async function applyVoiceUpdate(user: { id: string; role: Role; officeId:
 
   let sendStatus: string | null = null;
   if (data.sendToClient && data.clientMessage.trim()) {
-    sendStatus = await sendClientUpdate(
-      project.client.phone,
+    const sent = await notifyClient(
+      project.client,
       data.clientMessage.trim() + (project.client.portalToken ? `\n\nPhotos and progress: ${appUrl}/portal/${project.client.portalToken}` : ""),
       data.photos.filter((p) => p.clientVisible).map((p) => p.url),
       appUrl,
+      user.id,
     );
+    sendStatus = sent.note;
     await db
       .update(siteUpdates)
-      .set({ sentToClient: sendStatus === "sent on WhatsApp", sendStatus, sentAt: new Date() })
+      .set({ sentToClient: sent.status === "SENT", sendStatus, sentAt: new Date() })
       .where(eq(siteUpdates.id, updateId));
   }
 

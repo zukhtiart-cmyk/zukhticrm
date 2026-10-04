@@ -3,6 +3,7 @@ import { can, isDeskOnly, roleLabels } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import { Sidebar, type NavItem } from "@/components/nav";
 import { logout } from "@/app/login/actions";
+import { inboxAttentionCount } from "@/lib/wa-inbox";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -12,6 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/", label: "Today", icon: "home" },
     ...(can(user.role, "leads") ? [{ href: "/leads", label: "Leads", icon: "leads" } as NavItem] : []),
     { href: "/projects", label: "Projects", icon: "projects" },
+    ...(can(user.role, "inbox") ? [{ href: "/inbox", label: "WhatsApp", icon: "inbox", badge: await inboxAttentionCount(user) } as NavItem] : []),
     { href: "/desk", label: "Voice desk", icon: "voice" },
     ...(can(user.role, "rates") ? [{ href: "/rates", label: "Rates", icon: "rates" } as NavItem] : []),
     ...(can(user.role, "admin") ? [{ href: "/admin", label: "Team", icon: "admin" } as NavItem] : []),

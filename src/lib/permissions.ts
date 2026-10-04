@@ -12,12 +12,13 @@ export type Capability =
   | "design"
   | "rates"
   | "admin"
-  | "voice";
+  | "voice"
+  | "inbox";
 
 const matrix: Record<Role, Capability[]> = {
-  OWNER: ["leads", "projects.view", "projects.edit", "boq", "payments", "orders", "visits", "stages", "design", "rates", "admin", "voice"],
-  ADMIN: ["leads", "projects.view", "projects.edit", "boq", "payments", "orders", "visits", "stages", "design", "rates", "admin", "voice"],
-  DESIGNER: ["leads", "projects.view", "boq", "design", "visits", "rates", "voice"],
+  OWNER: ["leads", "projects.view", "projects.edit", "boq", "payments", "orders", "visits", "stages", "design", "rates", "admin", "voice", "inbox"],
+  ADMIN: ["leads", "projects.view", "projects.edit", "boq", "payments", "orders", "visits", "stages", "design", "rates", "admin", "voice", "inbox"],
+  DESIGNER: ["leads", "projects.view", "boq", "design", "visits", "rates", "voice", "inbox"],
   SUPERVISOR: ["projects.view", "stages", "visits", "voice"],
   PROCUREMENT: ["projects.view", "orders", "rates", "voice"],
   ACCOUNTS: ["projects.view", "payments", "voice"],

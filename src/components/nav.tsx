@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, FolderKanban, Home, LogOut, Mic, Settings, Users } from "lucide-react";
+import { BookOpen, FolderKanban, Home, LogOut, MessageCircle, Mic, Settings, Users } from "lucide-react";
 
-const ICONS = { home: Home, leads: Users, projects: FolderKanban, voice: Mic, rates: BookOpen, admin: Settings };
-export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
+const ICONS = { home: Home, leads: Users, projects: FolderKanban, inbox: MessageCircle, voice: Mic, rates: BookOpen, admin: Settings };
+export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
 export function Sidebar({ items, userName, roleLabel, office, logout }: { items: NavItem[]; userName: string; roleLabel: string; office: string; logout: () => Promise<void> }) {
   const path = usePathname();
@@ -28,6 +28,7 @@ export function Sidebar({ items, userName, roleLabel, office, logout }: { items:
               >
                 <Icon size={18} />
                 {it.label}
+                {!!it.badge && <span className="ml-auto rounded-full bg-clay px-2 py-0.5 text-[11px] font-bold text-white">{it.badge}</span>}
               </Link>
             );
           })}
@@ -64,8 +65,9 @@ export function Sidebar({ items, userName, roleLabel, office, logout }: { items:
           const isVoice = it.icon === "voice";
           return (
             <Link key={it.href} href={it.href} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold ${active(it.href) ? "text-ink" : "text-muted"}`}>
-              <span className={isVoice ? "grid h-9 w-9 place-items-center rounded-full bg-brass text-white" : ""}>
+              <span className={`relative ${isVoice ? "grid h-9 w-9 place-items-center rounded-full bg-brass text-white" : ""}`}>
                 <Icon size={isVoice ? 18 : 20} />
+                {!!it.badge && <span className="absolute -right-2 -top-1 rounded-full bg-clay px-1.5 text-[10px] font-bold text-white">{it.badge}</span>}
               </span>
               {it.label}
             </Link>

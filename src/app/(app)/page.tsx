@@ -5,6 +5,7 @@ import { officeScope, requireUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { date, dateTime, money } from "@/lib/format";
 import { Badge, Empty, PageHeader, ProgressBar, Section, Stat } from "@/components/ui";
+import { listConversations } from "@/lib/wa-inbox";
 
 export const metadata = { title: "Today" };
 
@@ -70,6 +71,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       : Promise.resolve([]),
   ]);
 
+  const waAttention = can(user.role, "inbox") ? (await listConversations(user)).filter((c) => c.needsHuman || c.pending > 0) : [];
+
   // A milestone is "due" when its stage has started (or it has no stage, like the booking advance).
   const dueNow = dueMilestones.filter((m) => !m.dueStage || m.dueStage.status !== "NOT_STARTED");
 
@@ -84,6 +87,16 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         {can(user.role, "payments") && <Stat label="Payments due" value={dueNow.length} />}
         <Stat label="Visits this week" value={upcomingVisits.length} />
       </div>
+
+      {waAttention.length > 0 && (
+        <Link href="/inbox" className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-clay/30 bg-clay-soft px-4 py-3 text-clay">
+          <span className="text-sm font-semibold">
+            {waAttention.length} WhatsApp conversation{waAttention.length > 1 ? "s" : ""} need you: {waAttention.slice(0, 3).map((c) => c.client?.name ?? c.lead?.name ?? c.name ?? `+${c.phone}`).join(", ")}
+            {waAttention.length > 3 ? "…" : ""}
+          </span>
+          <span className="text-sm font-semibold">Open →</span>
+        </Link>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         {can(user.role, "leads") && (

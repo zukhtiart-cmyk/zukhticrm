@@ -4,7 +4,7 @@ Team workspace for Zukhti Home, a turnkey interior design company. It covers lea
 
 Built with Next.js 15, Postgres (Drizzle ORM) and Tailwind. It's designed to run on Vercel.
 
-## What's in this version (Phases 1–2)
+## What's in this version (Phases 1–3)
 
 | Area | What it does |
 | --- | --- |
@@ -62,6 +62,61 @@ On the portal, the client sees:
 
 The portal never shows costs, margins, vendor names, internal notes, issues or draft designs. Updates sent from the voice desk include the portal link when the portal is on. Design responses show up on the team's **Today** page.
 
+### WhatsApp assistant (Phase 3)
+
+When a client messages your WhatsApp Business number, the app finds them by phone number and answers from their live project data. It covers:
+- **Status:** stage, % complete, latest update, next stage, handover date
+- **Photos:** latest site photos (client-visible ones only)
+- **Payments:** paid so far and next payment due
+- **Designs:** designs waiting for their approval
+- **Deliveries:** furniture and fittings status, with dates
+- **Visits:** next scheduled visit
+
+How it behaves:
+- **Several projects:** a client with more than one active project is asked which one, and can say "change project" any time.
+- **Asking for a person:** "talk", "manager", complaints, delays, discounts or refunds hand the chat to the team. The client is told their project manager will reply, and the assistant pauses for that client until someone clicks **Resume assistant**.
+- **Unknown numbers:** they become a new **WhatsApp lead**, get a welcome message, and are flagged for sales.
+- **Media:** voice notes are transcribed if the OpenAI key is set. Photos and documents are flagged for a person.
+- **Privacy:** replies only use client-safe facts. They never include vendors, costs, margins, internal notes or other clients.
+- **Two modes** (Team → WhatsApp assistant): **Approve before sending** (default; drafts wait in the inbox) or **Reply automatically**.
+- **Without an Anthropic key:** replies use built-in rules (status, photos, payments, designs, deliveries, visits). With the key, replies are written by AI in the client's language (English, Hindi, Hinglish or Arabic), still only from the same facts.
+
+**WhatsApp inbox** (`/inbox`, for owner, admin and designers):
+- Lists all chats, with **Needs attention** first.
+- Approve or edit drafts, reply yourself, and pause or resume the assistant.
+- The Today page and the menu show how many chats need you.
+
+**Proactive messages:**
+- **Voice Desk updates:** updates sent to clients go out on WhatsApp and appear in the inbox.
+- **Weekly summary:** sent every **Saturday 10:00 IST**, one per active project. It can be turned off in Team settings.
+
+**WhatsApp's 24-hour rule:** you can message a client freely only within 24 hours of their last message. Outside that window, the app uses your approved **template** if one is set up; otherwise the message is marked "queued" in the inbox.
+
+#### Connecting WhatsApp (one time, about 30–60 minutes)
+
+1. Go to **business.facebook.com**, create or select your Business, and verify it if asked.
+2. Go to **developers.facebook.com → My Apps → Create app → Business**. Add the **WhatsApp** product.
+3. In **WhatsApp → API Setup**:
+   - Add your business phone number. It must not already be used in the WhatsApp app; a new number or a migrated one works.
+   - Copy the **Phone number ID** into the Vercel variable `WHATSAPP_PHONE_NUMBER_ID`.
+4. Create a **permanent access token**:
+   - Go to Business settings → Users → **System users**. Add a system user as Admin.
+   - Click **Generate token** for your app, with the permissions `whatsapp_business_messaging` and `whatsapp_business_management`.
+   - Put the token in `WHATSAPP_TOKEN`.
+5. In the Meta app, open **App settings → Basic** and copy the **App secret** into `WHATSAPP_APP_SECRET`.
+6. Make up any long random text and put it in `WHATSAPP_VERIFY_TOKEN`. Redeploy on Vercel.
+7. In **WhatsApp → Configuration → Webhook**, click **Edit**:
+   - Callback URL: `https://YOUR-SITE/api/whatsapp/webhook`
+   - Verify token: the same text as `WHATSAPP_VERIFY_TOKEN`
+   - Click **Verify and save**, then **subscribe to `messages`**.
+8. Create a message template in **WhatsApp Manager → Message templates**. Choose category **Utility** and give it a name such as `project_update`, with the body:
+   > Hello {{1}}, here is an update from Zukhti Home: {{2}}
+
+   Once it's approved, set `WHATSAPP_TEMPLATE_NAME=project_update` and `WHATSAPP_TEMPLATE_LANG=en`.
+9. Add `CRON_SECRET` (any long random text) for the Saturday summaries, and `APP_URL` (your live address).
+10. Redeploy. In the CRM, open **Team → WhatsApp assistant**: the checklist should show all ticks.
+11. Test it: message your business number from a phone saved on a client (it needs a project). Then open **WhatsApp** in the CRM to see the draft.
+
 ## Set up and deploy on Vercel
 
 1. **Import the repo** in Vercel (New Project → this repo). Framework: Next.js.
@@ -92,13 +147,12 @@ Don't run `db:seed` on the live database, because the demo logins share a known 
 
 ## Notes
 
-- **WhatsApp:** free-form messages only reach clients who have messaged your business number in the last 24 hours. Outside that window, WhatsApp requires a pre-approved template. Templates and the client auto-reply assistant are Phase 3.
+- **WhatsApp:** free-form messages only reach clients who have messaged your business number in the last 24 hours. Outside that window, the app uses your approved template (see Phase 3 setup).
 - **Voice notes, photos and design files** are stored in Vercel Blob with unguessable links. Anyone with the link can open the file.
 - **Portal links** work like a private link: anyone who has the link can see that client's projects. Use **New link** if one is shared by mistake.
 - **Schema changes:** edit `src/db/schema.ts`, run `npm run db:generate`, and commit the new file in `drizzle/`.
 
 ## Not built yet
 
-- WhatsApp auto-reply assistant for client questions (Phase 3)
 - Offline recording on weak site signal, and GPS-based project suggestion on the voice desk
 - Procurement vendor database, multi-currency conversion, AI BOQ drafting (Phase 4)
