@@ -51,7 +51,7 @@ The portal never shows costs, margins, vendor names, internal notes, issues or d
 
 1. **Import the repo** in Vercel (New Project → this repo). Framework: Next.js.
 2. **Database:** in the Vercel project → Storage → add **Neon Postgres** and connect it to the project. It sets the database variables automatically. No extra connection string is needed.
-3. **Photo storage:** Storage → add **Blob**. It sets `BLOB_READ_WRITE_TOKEN`.
+3. **Photo storage:** Storage → add **Blob** and connect it to the project. Its settings are added automatically.
 4. **Environment variables** (Settings → Environment Variables), see `.env.example`:
    - `AUTH_SECRET`: a long random string (`openssl rand -base64 32`)
    - `OPENAI_API_KEY`: speech-to-text for voice notes
