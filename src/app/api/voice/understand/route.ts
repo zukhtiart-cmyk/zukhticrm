@@ -7,6 +7,7 @@ import { basicUnderstand, transcribe, understand } from "@/lib/voice-ai";
 import { buildVoiceContext } from "@/lib/voice-context";
 import { saveFile } from "@/lib/storage";
 import type { UnderstandResult } from "@/lib/voice-types";
+import { shortAiReason } from "@/lib/ai-errors";
 
 export const maxDuration = 60;
 
@@ -50,8 +51,7 @@ export async function POST(req: Request) {
       // AI unavailable (no credit, outage): fall back to basic mode rather than blocking the site team.
       console.error("voice understand failed", e);
       useAI = false;
-      const status = (e as { status?: number }).status;
-      aiWarning = `AI understanding is unavailable right now${status ? ` (${status === 400 || status === 402 ? "check Anthropic credit/billing" : status === 401 ? "check ANTHROPIC_API_KEY" : status})` : ""}; basic mode was used, so please check the card carefully.`;
+      aiWarning = `AI understanding is unavailable right now (${shortAiReason(e)}); basic mode was used, so please check the card carefully.`;
       proposal = basicUnderstand(transcript, ctx);
     }
     const result: UnderstandResult = {

@@ -8,6 +8,7 @@ import { resetPassword, setUserPhone, toggleUserActive, updateOffice } from "./a
 import { saveWhatsappSettings } from "../inbox/actions";
 import { getSettings } from "@/lib/settings";
 import { appBaseUrl } from "@/lib/portal";
+import { AiCheck } from "./ai-check";
 import { templateConfigured, whatsappConfigured } from "@/lib/whatsapp";
 
 export const metadata = { title: "Team" };
@@ -128,6 +129,9 @@ export default async function AdminPage() {
                 </li>
               ))}
             </ul>
+            <div className="mt-3">
+              <AiCheck />
+            </div>
             <p className="mt-3 text-xs text-muted">
               Webhook URL for Meta: <code className="break-all">{base}/api/whatsapp/webhook</code> · subscribe to the <code>messages</code> field.
             </p>

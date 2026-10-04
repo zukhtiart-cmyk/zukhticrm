@@ -16,6 +16,7 @@ import {
   type IntakeKind,
 } from "@/lib/intake-fields";
 import { transcribe } from "@/lib/voice-ai";
+import { shortAiReason } from "@/lib/ai-errors";
 
 export const maxDuration = 60;
 
@@ -100,7 +101,7 @@ export async function POST(req: Request) {
       console.error("intake AI failed", e);
       notice = [
         notice,
-        "AI is unavailable right now, so answers are filled field by field — check them before saving.",
+        `AI is unavailable right now (${shortAiReason(e)}), so basic mode is filling the form — check the details before saving.`,
       ]
         .filter(Boolean)
         .join(" ");

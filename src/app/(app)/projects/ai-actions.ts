@@ -7,6 +7,7 @@ import { boqItems, db, rateItems } from "@/db";
 import { draftBoq, type BoqSuggestion } from "@/lib/ai-boq";
 import { syncMilestoneAmounts } from "@/lib/projects";
 import { assertProjectAccess } from "./data";
+import { shortAiReason } from "@/lib/ai-errors";
 
 export type DraftState = { error?: string; items?: BoqSuggestion[]; assumptions?: string[]; at?: number };
 
@@ -35,7 +36,7 @@ export async function draftBoqAction(_: DraftState, form: FormData): Promise<Dra
     return { ...out, at: Date.now() };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (/credit|billing|429|quota/i.test(msg)) return { error: "The AI provider declined the request (check Anthropic credit/billing). Add lines manually below meanwhile." };
+    if (!msg.includes("ANTHROPIC_API_KEY")) return { error: `AI draft failed: ${shortAiReason(e)}. Add lines manually below meanwhile.` };
     return { error: msg.includes("ANTHROPIC_API_KEY") ? msg : `AI draft failed: ${msg.slice(0, 200)}` };
   }
 }
