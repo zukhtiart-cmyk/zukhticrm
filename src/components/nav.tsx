@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, FolderKanban, Home, LogOut, MessageCircle, Mic, Settings, Users } from "lucide-react";
+import { BarChart3, BookOpen, FolderKanban, Home, LogOut, MessageCircle, Mic, Package, Settings, Users } from "lucide-react";
 
-const ICONS = { home: Home, leads: Users, projects: FolderKanban, inbox: MessageCircle, voice: Mic, rates: BookOpen, admin: Settings };
+const ICONS = { home: Home, dashboard: BarChart3, leads: Users, projects: FolderKanban, inbox: MessageCircle, procurement: Package, voice: Mic, rates: BookOpen, admin: Settings };
+/** Shown in the phone bottom bar; the rest are in the desktop sidebar only. */
+const MOBILE: (keyof typeof ICONS)[] = ["home", "leads", "projects", "inbox", "voice"];
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
 
 export function Sidebar({ items, userName, roleLabel, office, logout }: { items: NavItem[]; userName: string; roleLabel: string; office: string; logout: () => Promise<void> }) {
@@ -59,8 +61,8 @@ export function Sidebar({ items, userName, roleLabel, office, logout }: { items:
       </header>
 
       {/* Mobile bottom nav */}
-      <nav className="no-print fixed inset-x-0 bottom-0 z-20 grid border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
-        {items.map((it) => {
+      <nav className="no-print fixed inset-x-0 bottom-0 z-20 grid border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden" style={{ gridTemplateColumns: `repeat(${items.filter((i) => MOBILE.includes(i.icon)).length}, minmax(0, 1fr))` }}>
+        {items.filter((i) => MOBILE.includes(i.icon)).map((it) => {
           const Icon = ICONS[it.icon];
           const isVoice = it.icon === "voice";
           return (

@@ -29,6 +29,13 @@
       "when": 1791099081896,
       "tag": "0003_whatsapp",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791106720815,
+      "tag": "0004_procurement",
+      "breakpoints": true
     }
   ]
 }

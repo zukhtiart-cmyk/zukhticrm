@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
+  doublePrecision,
   integer,
   jsonb,
   numeric,
@@ -125,6 +126,9 @@ export const projects = pgTable("projects", {
     .notNull()
     .references(() => offices.id),
   managerId: text("manager_id").references(() => users.id),
+  /** Site location, for suggesting the nearest project on the Voice Desk. */
+  siteLat: doublePrecision("site_lat"),
+  siteLng: doublePrecision("site_lng"),
   createdAt: created(),
 });
 
@@ -248,14 +252,55 @@ export const orders = pgTable("purchase_orders", {
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
   item: text("item").notNull(),
+  /** Free-text vendor name (orders recorded by voice); vendorId when chosen from the vendor list. */
   vendor: text("vendor"),
+  vendorId: text("vendor_id").references(() => vendors.id, { onDelete: "set null" }),
+  /** Lines created together share one PO number, e.g. PO-2026-0012. */
+  poNumber: text("po_number"),
+  boqItemId: text("boq_item_id").references(() => boqItems.id, { onDelete: "set null" }),
+  qty: numeric("qty", { precision: 12, scale: 2, mode: "number" }),
+  unit: text("unit"),
+  /** Cost per unit in the vendor's currency. */
+  unitCost: money("unit_cost"),
+  currency: text("currency"),
+  /** 1 unit of order currency = fxRate units of the project's currency, fixed when the PO is raised. */
+  fxRate: numeric("fx_rate", { precision: 14, scale: 6, mode: "number" }),
   status: orderStatusEnum("status").notNull().default("ORDERED"),
   eta: timestamp("eta", { withTimezone: true }),
+  orderedAt: timestamp("ordered_at", { withTimezone: true }),
+  shippedAt: timestamp("shipped_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  containerNo: text("container_no"),
+  port: text("port"),
   notes: text("notes"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
+});
+
+export const vendors = pgTable("vendors", {
+  id: id(),
+  name: text("name").notNull(),
+  country: text("country").notNull().default("China"),
+  city: text("city"),
+  category: text("category"),
+  contactName: text("contact_name"),
+  phone: text("phone"),
+  email: text("email"),
+  currency: text("currency").notNull().default("CNY"),
+  leadTimeDays: integer("lead_time_days"),
+  notes: text("notes"),
+  active: boolean("active").notNull().default(true),
+  createdAt: created(),
+});
+
+/** Evening summary of the day across all sites (one per day). */
+export const dailyReports = pgTable("daily_reports", {
+  id: id(),
+  day: text("day").notNull().unique(),
+  body: text("body").notNull(),
+  createdAt: created(),
 });
 
 export const visits = pgTable("site_visits", {
@@ -374,13 +419,21 @@ export const photosRelations = relations(photos, ({ one }) => ({
   project: one(projects, { fields: [photos.projectId], references: [projects.id] }),
   update: one(siteUpdates, { fields: [photos.updateId], references: [siteUpdates.id] }),
 }));
-export const boqItemsRelations = relations(boqItems, ({ one }) => ({ project: one(projects, { fields: [boqItems.projectId], references: [projects.id] }) }));
+export const boqItemsRelations = relations(boqItems, ({ one, many }) => ({
+  project: one(projects, { fields: [boqItems.projectId], references: [projects.id] }),
+  orders: many(orders),
+}));
 export const quotesRelations = relations(quotes, ({ one }) => ({ project: one(projects, { fields: [quotes.projectId], references: [projects.id] }) }));
 export const milestonesRelations = relations(milestones, ({ one }) => ({
   project: one(projects, { fields: [milestones.projectId], references: [projects.id] }),
   dueStage: one(stages, { fields: [milestones.dueStageId], references: [stages.id] }),
 }));
-export const ordersRelations = relations(orders, ({ one }) => ({ project: one(projects, { fields: [orders.projectId], references: [projects.id] }) }));
+export const ordersRelations = relations(orders, ({ one }) => ({
+  project: one(projects, { fields: [orders.projectId], references: [projects.id] }),
+  vendorRef: one(vendors, { fields: [orders.vendorId], references: [vendors.id] }),
+  boqItem: one(boqItems, { fields: [orders.boqItemId], references: [boqItems.id] }),
+}));
+export const vendorsRelations = relations(vendors, ({ many }) => ({ orders: many(orders) }));
 export const visitsRelations = relations(visits, ({ one }) => ({ project: one(projects, { fields: [visits.projectId], references: [projects.id] }) }));
 export const designsRelations = relations(designs, ({ one }) => ({
   project: one(projects, { fields: [designs.projectId], references: [projects.id] }),

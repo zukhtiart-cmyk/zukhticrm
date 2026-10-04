@@ -4,6 +4,7 @@ import { db, rateItems } from "@/db";
 import { dateTime, money, round2 } from "@/lib/format";
 import { Empty, Section, StatusBadge } from "@/components/ui";
 import { loadProject } from "../../data";
+import { projectMargin } from "@/lib/margin";
 import { addBoqItem, createQuote, deleteBoqItem, setQuoteStatus, updateBoqItem } from "../../money-actions";
 
 export default async function BoqPage({ params }: { params: Promise<{ id: string }> }) {
@@ -17,6 +18,8 @@ export default async function BoqPage({ params }: { params: Promise<{ id: string
   const cost = round2(items.reduce((a, i) => a + i.qty * i.unitCost, 0));
   const tax = round2((subtotal * project.office.taxRate) / 100);
   const margin = subtotal ? Math.round(((subtotal - cost) / subtotal) * 100) : 0;
+  const trueMargin = await projectMargin(project.id);
+  const orderedIds = new Set(project.orders.map((o) => o.boqItemId).filter(Boolean));
 
   return (
     <div className="grid gap-5">
@@ -37,8 +40,12 @@ export default async function BoqPage({ params }: { params: Promise<{ id: string
         </div>
         <div className="card p-4">
           <p className="label">Margin (internal)</p>
-          <p className={`h-display text-2xl ${margin < 20 ? "text-clay" : "text-olive"}`}>{margin}%</p>
-          <p className="text-xs text-muted">Cost {money(cost, cur)}</p>
+          <p className={`h-display text-2xl ${trueMargin.marginPct < 20 ? "text-clay" : "text-olive"}`}>{trueMargin.marginPct}%</p>
+          <p className="text-xs text-muted">
+            {trueMargin.orderedLines
+              ? `Using actual PO costs for ${trueMargin.orderedLines} of ${trueMargin.totalLines} lines (estimate was ${margin}%)`
+              : `Estimated — cost ${money(cost, cur)}`}
+          </p>
         </div>
       </div>
 
@@ -70,7 +77,10 @@ export default async function BoqPage({ params }: { params: Promise<{ id: string
                     <input name="unit" defaultValue={i.unit} className="input py-1.5" aria-label="Unit" />
                     <input name="unitCost" type="number" step="0.01" defaultValue={i.unitCost} className="input py-1.5" aria-label="Unit cost" title="Unit cost (internal)" />
                     <input name="unitPrice" type="number" step="0.01" defaultValue={i.unitPrice} className="input py-1.5" aria-label="Unit price" title="Unit price to client" />
-                    <span className="text-right font-semibold">{money(i.qty * i.unitPrice, cur)}</span>
+                    <span className="text-right font-semibold">
+                      {money(i.qty * i.unitPrice, cur)}
+                      {orderedIds.has(i.id) && <span className="block text-[10px] font-semibold uppercase text-olive">Ordered</span>}
+                    </span>
                     <div className="flex justify-end gap-1">
                       <button className="btn-ghost px-2 py-1.5 text-xs">Save</button>
                       <button formAction={deleteBoqItem} className="btn-ghost px-2 py-1.5 text-xs text-clay">

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, users } from "@/db";
 import { SESSION_COOKIE, verifySession, type SessionPayload } from "./session";
-import { can, type Capability } from "./permissions";
+import { can, isDeskOnly, type Capability } from "./permissions";
 export { officeScope } from "./permissions";
 
 export async function getSession(): Promise<SessionPayload | null> {
@@ -18,7 +18,7 @@ export async function requireUser(capability?: Capability) {
   if (!session) redirect("/login");
   const user = await db.query.users.findFirst({ where: eq(users.id, session.userId), with: { office: true } });
   if (!user || !user.active) redirect("/login");
-  if (capability && !can(user.role, capability)) redirect("/?denied=1");
+  if (capability && !can(user.role, capability)) redirect(isDeskOnly(user.role) ? "/desk" : "/?denied=1");
   return user;
 }
 

@@ -2,14 +2,23 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { db, settings } from "@/db";
 
+/** 1 unit of each currency = this many INR. Edited by the owner on the Rates page. */
+export type FxRates = { asOf: string; perINR: Record<string, number> };
+
 export type AppSettings = {
+  fxRates: FxRates;
   /** auto = assistant replies straight away; approve = replies wait in the inbox for a person to send */
   whatsappMode: "auto" | "approve";
   /** Saturday summary to every client with an active project */
   weeklySummary: boolean;
 };
 
-const DEFAULTS: AppSettings = { whatsappMode: "approve", weeklySummary: true };
+const DEFAULTS: AppSettings = {
+  whatsappMode: "approve",
+  weeklySummary: true,
+  // Starting values only — check and update them on the Rates page.
+  fxRates: { asOf: "not set", perINR: { INR: 1, AED: 23, CNY: 12, USD: 85, EUR: 92 } },
+};
 
 export async function getSettings(): Promise<AppSettings> {
   const rows = await db.select().from(settings);

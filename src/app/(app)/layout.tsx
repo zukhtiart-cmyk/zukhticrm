@@ -11,9 +11,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (isDeskOnly(user.role)) redirect("/desk");
   const items: NavItem[] = [
     { href: "/", label: "Today", icon: "home" },
+    ...(can(user.role, "admin") ? [{ href: "/dashboard", label: "Dashboard", icon: "dashboard" } as NavItem] : []),
     ...(can(user.role, "leads") ? [{ href: "/leads", label: "Leads", icon: "leads" } as NavItem] : []),
     { href: "/projects", label: "Projects", icon: "projects" },
     ...(can(user.role, "inbox") ? [{ href: "/inbox", label: "WhatsApp", icon: "inbox", badge: await inboxAttentionCount(user) } as NavItem] : []),
+    ...(can(user.role, "orders") ? [{ href: "/desk/procurement", label: "Procurement", icon: "procurement" } as NavItem] : []),
     { href: "/desk", label: "Voice desk", icon: "voice" },
     ...(can(user.role, "rates") ? [{ href: "/rates", label: "Rates", icon: "rates" } as NavItem] : []),
     ...(can(user.role, "admin") ? [{ href: "/admin", label: "Team", icon: "admin" } as NavItem] : []),

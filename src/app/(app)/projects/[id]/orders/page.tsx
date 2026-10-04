@@ -1,6 +1,7 @@
 import { orderStatusEnum } from "@/db";
 import { can } from "@/lib/permissions";
-import { date, dateInput, titleCase } from "@/lib/format";
+import Link from "next/link";
+import { date, dateInput, money, titleCase } from "@/lib/format";
 import { Empty, Section, StatusBadge } from "@/components/ui";
 import { loadProject } from "../../data";
 import { saveOrder } from "../../actions";
@@ -9,9 +10,55 @@ export default async function OrdersPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const { user, project } = await loadProject(id);
   const edit = can(user.role, "orders");
+  const showCost = can(user.role, "orders") || can(user.role, "boq");
+  const cur = project.office.currency;
+  const pos = [...new Set(project.orders.map((o) => o.poNumber).filter((x): x is string => !!x))];
 
   return (
     <div className="grid gap-5">
+      {edit && (
+        <div className="flex justify-end">
+          <Link href={`/desk/procurement/new?project=${project.id}`} className="btn-brass">
+            Raise purchase order
+          </Link>
+        </div>
+      )}
+      {pos.length > 0 && (
+        <Section title="Purchase orders">
+          <ul className="divide-y divide-line text-sm">
+            {pos.map((po) => {
+              const lines = project.orders.filter((o) => o.poNumber === po);
+              const f = lines[0];
+              const total = lines.reduce((a, l) => a + (l.qty ?? 0) * (l.unitCost ?? 0), 0);
+              return (
+                <li key={po} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <span>
+                    {edit ? (
+                      <Link href={`/desk/procurement/po/${po}`} className="font-semibold hover:text-brass">
+                        {po}
+                      </Link>
+                    ) : (
+                      <span className="font-semibold">{po}</span>
+                    )}{" "}
+                    · {f.vendor} · {lines.length} line{lines.length > 1 ? "s" : ""}
+                    {f.containerNo ? ` · container ${f.containerNo}` : ""}
+                  </span>
+                  <span className="flex items-center gap-2 text-xs text-muted">
+                    {showCost && f.currency && (
+                      <>
+                        {money(total, f.currency)}
+                        {f.currency !== cur && ` ≈ ${money(total * (f.fxRate ?? 1), cur)}`} ·
+                      </>
+                    )}
+                    ETA {date(f.eta)}
+                    <StatusBadge status={f.status} />
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
+      )}
       <Section title="Orders & deliveries">
         {!project.orders.length && <Empty>No orders yet.</Empty>}
         <div className="grid gap-3">

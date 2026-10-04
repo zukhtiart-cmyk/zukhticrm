@@ -5,7 +5,7 @@
  */
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { db, clients, designs, leads, leadActivities, offices, orders, projects, rateItems, siteUpdates, stages, users, visits, boqItems, milestones } from "../src/db";
+import { db, clients, designs, vendors, leads, leadActivities, offices, orders, projects, rateItems, siteUpdates, stages, users, visits, boqItems, milestones } from "../src/db";
 import { createProjectWithDefaults, recomputeProjectProgress, syncMilestoneAmounts } from "../src/lib/projects";
 
 const PASSWORD = "zukhti123";
@@ -130,9 +130,20 @@ async function main() {
     { projectId: project.id, room: "Kitchen", title: "Kitchen elevation", version: 1, fileUrl: render, fileType: "image", status: "APPROVED", decidedAt: days(-30), sharedAt: days(-32), uploadedById: designer.id, createdAt: days(-32) },
   ]);
 
+  const [foshan, zhongshan] = await db
+    .insert(vendors)
+    .values([
+      { name: "Foshan Living Co.", country: "China", city: "Foshan", category: "Furniture", contactName: "Mr. Chen", phone: "+86 138 0000 0001", currency: "CNY", leadTimeDays: 45 },
+      { name: "Zhongshan Lighting", country: "China", city: "Zhongshan", category: "Lighting", contactName: "Ms. Lin", currency: "CNY", leadTimeDays: 35 },
+      { name: "Kajaria Stone Works", country: "India", city: "Mumbai", category: "Stone & tiles", currency: "INR", leadTimeDays: 10 },
+    ])
+    .returning();
+  const projectLines = await db.select().from(boqItems).where(eq(boqItems.projectId, project.id));
+  const sofaLine = projectLines.find((b) => b.description.startsWith("3-seater"))!;
+  const pendantLine = projectLines.find((b) => b.description.startsWith("Designer pendant"))!;
   await db.insert(orders).values([
-    { projectId: project.id, item: "3-seater sofa", vendor: "Foshan Living Co.", status: "SHIPPED", eta: days(17) },
-    { projectId: project.id, item: "Designer pendant lights (3)", vendor: "Zhongshan Lighting", status: "IN_PRODUCTION", eta: days(30) },
+    { projectId: project.id, item: "Living: 3-seater sofa (China sourced)", vendor: foshan.name, vendorId: foshan.id, poNumber: `PO-${new Date().getFullYear()}-0001`, boqItemId: sofaLine.id, qty: 1, unit: "nos", unitCost: 6800, currency: "CNY", fxRate: 12, status: "SHIPPED", orderedAt: days(-40), shippedAt: days(-5), containerNo: "MSKU1234567", port: "Nhava Sheva", eta: days(17) },
+    { projectId: project.id, item: "Designer pendant lights (3)", vendor: zhongshan.name, vendorId: zhongshan.id, poNumber: `PO-${new Date().getFullYear()}-0002`, boqItemId: pendantLine.id, qty: 3, unit: "nos", unitCost: 650, currency: "CNY", fxRate: 12, status: "IN_PRODUCTION", orderedAt: days(-20), eta: days(30) },
   ]);
   await db.insert(visits).values({ projectId: project.id, title: "Client walkthrough — carpentry", at: days(3) });
   await db.insert(siteUpdates).values([
