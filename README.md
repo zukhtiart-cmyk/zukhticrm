@@ -59,12 +59,9 @@ The portal never shows costs, margins, vendor names, internal notes, issues or d
    - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`: optional for now; client updates are saved as *queued* until these are set
    - `APP_URL`: optional, your live address (e.g. `https://crm.zukhtihome.com`) used in portal links; otherwise taken from the request
 5. **Deploy.** Database tables are created automatically on each deploy (`vercel-build` runs the migrations).
-6. **Create the owner login** once, from your computer, with the production `DATABASE_URL` in `.env`:
-   ```bash
-   npm install
-   npm run create-owner -- you@zukhti.com "Your Name" "a-strong-password"
-   ```
-   Then sign in and add your team under **Team**.
+6. **Create the owner login:** open your live site. On a fresh install it goes to a one-time **setup** page. Enter your `AUTH_SECRET` value as the setup code, then your name, email and password. The three offices are created and you're signed in. The setup page stops working once this first account exists. Add your team under **Team**.
+
+   (Alternative from a terminal: `npm run create-owner -- email "Name" "password"` with `DATABASE_URL` in `.env`.)
 
 ## Run locally
 
