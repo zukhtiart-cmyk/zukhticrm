@@ -302,6 +302,15 @@ const STOP = new Set([
   "regarding",
   "lives",
   "living",
+  "his",
+  "her",
+  "their",
+  "whose",
+  "mobile",
+  "cell",
+  "whatsapp",
+  "email",
+  "mail",
 ]);
 const NON_NAMES =
   /^(apartment|villa|flat|bhk|bedroom|office|carpenter|painter|electrician|plumber|instagram|referral|website|whatsapp|mumbai|dubai|budget|rate|rates|upi|tiling|tile|helper|labour|labor)$/i;
