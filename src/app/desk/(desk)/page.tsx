@@ -54,6 +54,7 @@ export default async function DeskPage({ searchParams }: { searchParams: Promise
         defaultSend={defaultSendToClient[user.role]}
         whatsappReady={whatsappConfigured()}
         guide={deskGuide[user.role]}
+        serverSpeech={!!process.env.OPENAI_API_KEY}
         perms={{
           stages: can(user.role, "stages"),
           payments: can(user.role, "payments"),

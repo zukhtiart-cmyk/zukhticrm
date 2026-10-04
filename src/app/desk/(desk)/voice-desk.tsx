@@ -94,6 +94,24 @@ async function compress(file: File): Promise<Blob> {
   }
 }
 
+// Minimal typings for the browser's speech recognition (Chrome, Safari).
+type SpeechRecResult = { isFinal: boolean; 0: { transcript: string } };
+type SpeechRec = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: { resultIndex: number; results: ArrayLike<SpeechRecResult> }) => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+function getSpeechRecognition(): (new () => SpeechRec) | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
 function pickMime() {
   if (typeof MediaRecorder === "undefined") return "";
   for (const t of ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"]) if (MediaRecorder.isTypeSupported(t)) return t;
@@ -108,6 +126,7 @@ export function VoiceDesk({
   whatsappReady,
   perms,
   guide,
+  serverSpeech,
 }: {
   projects: ProjectOption[];
   snapshots: Record<string, ProjectSnapshot>;
@@ -116,6 +135,8 @@ export function VoiceDesk({
   whatsappReady: boolean;
   perms: Perms;
   guide: { focus: string; example: string };
+  /** True when the server can transcribe recordings (OPENAI_API_KEY set); otherwise the phone's own dictation is used. */
+  serverSpeech: boolean;
 }) {
   const [projectId, setProjectId] = useState(initialProjectId);
   const [step, setStep] = useState<"capture" | "review" | "done">("capture");
@@ -139,6 +160,14 @@ export function VoiceDesk({
   const [sendToClient, setSendToClient] = useState(defaultSend);
   const [saving, startSaving] = useTransition();
   const [saved, setSaved] = useState<{ sendStatus: string | null; changes: number } | null>(null);
+
+  // Phone dictation (used when server speech-to-text isn't configured)
+  const [listening, setListening] = useState(false);
+  const [interim, setInterim] = useState("");
+  const [dictLang, setDictLang] = useState("en-IN");
+  const recognition = useRef<SpeechRec | null>(null);
+  const [dictationSupported, setDictationSupported] = useState(true);
+  useEffect(() => setDictationSupported(!!getSpeechRecognition()), []);
 
   const project = projects.find((p) => p.id === projectId);
   const audioSrc = useMemo(() => (audio ? URL.createObjectURL(audio) : null), [audio]);
@@ -179,6 +208,42 @@ export function VoiceDesk({
     if (timer.current) clearInterval(timer.current);
   }
 
+  function startDictation() {
+    const Rec = getSpeechRecognition();
+    if (!Rec) return setDictationSupported(false);
+    setError(null);
+    const rec = new Rec();
+    rec.lang = dictLang;
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = (e) => {
+      let finalText = "";
+      let interimText = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interimText += r[0].transcript;
+      }
+      if (finalText) setTyped((t) => (t ? `${t.trimEnd()} ${finalText.trim()}` : finalText.trim()));
+      setInterim(interimText);
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") setError("Microphone or speech recognition is blocked. Allow it in your browser settings, or type the update.");
+      else if (e.error !== "no-speech" && e.error !== "aborted") setError(`Voice typing stopped (${e.error}). Tap the mic to continue, or type.`);
+    };
+    rec.onend = () => {
+      setListening(false);
+      setInterim("");
+    };
+    recognition.current = rec;
+    rec.start();
+    setListening(true);
+  }
+
+  function stopDictation() {
+    recognition.current?.stop();
+  }
+
   async function addPhotos(files: FileList | null) {
     if (!files || !projectId) return;
     const added: Photo[] = Array.from(files).map((f) => ({ key: crypto.randomUUID(), preview: URL.createObjectURL(f), clientVisible: true }));
@@ -192,11 +257,19 @@ export function VoiceDesk({
           body.append("projectId", projectId);
           body.append("file", new File([blob], `site-${Date.now()}.jpg`, { type: blob.type || "image/jpeg" }));
           const res = await fetch("/api/upload", { method: "POST", body });
-          const json = await res.json();
-          if (!res.ok) throw new Error(json.error);
+          const raw = await res.text();
+          let json: { url?: string; error?: string } = {};
+          try {
+            json = JSON.parse(raw);
+          } catch {
+            json = { error: res.status === 413 ? "Photo is too large" : `Upload failed (${res.status})` };
+          }
+          if (!res.ok || !json.url) throw new Error(json.error || `Upload failed (${res.status})`);
           setPhotos((p) => p.map((x) => (x.key === key ? { ...x, url: json.url } : x)));
         } catch (e) {
-          setPhotos((p) => p.map((x) => (x.key === key ? { ...x, error: (e as Error).message || "Upload failed" } : x)));
+          const message = (e as Error).message || "Upload failed";
+          setPhotos((p) => p.map((x) => (x.key === key ? { ...x, error: message } : x)));
+          setError(`Photo not uploaded: ${message}`);
         }
       }),
     );
@@ -522,6 +595,7 @@ export function VoiceDesk({
         {snapshots[projectId] && <Snapshot s={snapshots[projectId]} />}
       </div>
 
+      {serverSpeech ? (
       <div className="card flex flex-col items-center p-6 text-center">
         {!recording && !audio && (
           <>
@@ -553,9 +627,44 @@ export function VoiceDesk({
           </div>
         )}
       </div>
+      ) : (
+        <div className="card flex flex-col items-center p-6 text-center">
+          <div className="mb-4 flex gap-1 rounded-full bg-ivory p-1 text-xs font-semibold">
+            {[
+              ["en-IN", "English"],
+              ["hi-IN", "हिन्दी"],
+              ["ar-AE", "عربي"],
+            ].map(([code, label]) => (
+              <button key={code} type="button" disabled={listening} onClick={() => setDictLang(code)} className={`rounded-full px-3 py-1.5 ${dictLang === code ? "bg-ink text-paper" : "text-muted"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {!listening ? (
+            <>
+              <button onClick={startDictation} disabled={!dictationSupported} className="grid h-28 w-28 place-items-center rounded-full bg-brass text-white shadow-lg transition active:scale-95 disabled:opacity-40" aria-label="Start speaking">
+                <Mic size={44} />
+              </button>
+              <p className="mt-3 text-sm font-semibold">{dictationSupported ? "Tap and speak" : "Voice typing not supported here"}</p>
+              <p className="mt-1 max-w-xs text-xs text-muted">
+                {dictationSupported ? <>e.g. &ldquo;{guide.example}&rdquo; — your words appear in the box below</> : "Tap the box below and use the 🎤 key on your phone keyboard to dictate."}
+              </p>
+            </>
+          ) : (
+            <>
+              <button onClick={stopDictation} className="relative grid h-28 w-28 place-items-center rounded-full bg-clay text-white shadow-lg" aria-label="Stop">
+                <span className="absolute inset-0 animate-ping rounded-full bg-clay/40" />
+                <Square size={36} className="relative" />
+              </button>
+              <p className="mt-3 text-sm font-semibold">Listening… tap to stop</p>
+              {interim && <p className="mt-2 max-w-xs text-sm text-muted">{interim}</p>}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="card p-4">
-        <label className="label" htmlFor="typed">{audio ? "Anything to add? (optional)" : "Or type the update"}</label>
+        <label className="label" htmlFor="typed">{!serverSpeech ? "Your update (edit if needed)" : audio ? "Anything to add? (optional)" : "Or type the update"}</label>
         <textarea id="typed" value={typed} onChange={(e) => setTyped(e.target.value)} rows={3} className="input" placeholder="Carpentry 70%, kitchen shutters fixed…" />
       </div>
 
@@ -591,7 +700,7 @@ export function VoiceDesk({
       {error && <p className="rounded-xl bg-clay-soft px-4 py-2 text-sm text-clay">{error}</p>}
 
       <div className="sticky bottom-20 z-10 lg:bottom-4">
-        <button onClick={() => understand()} disabled={busy || recording || uploading || (!audio && !typed.trim())} className="btn-primary w-full py-3.5 text-base shadow-lg">
+        <button onClick={() => understand()} disabled={busy || recording || listening || uploading || (!audio && !typed.trim())} className="btn-primary w-full py-3.5 text-base shadow-lg">
           {busy ? <Loader2 className="animate-spin" size={18} /> : null}
           {busy ? "Understanding your update…" : uploading ? "Uploading photos…" : "Continue"}
         </button>

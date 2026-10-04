@@ -5,6 +5,7 @@ import { Badge, Empty, ProgressBar, Section } from "@/components/ui";
 import { DesignStatusBadge, DesignThumb } from "@/components/design-bits";
 import { DesignDecision } from "./design-card";
 import { acceptQuote } from "./actions";
+import { portalFileUrl } from "@/lib/storage";
 
 const ORDER_LABEL: Record<string, string> = {
   ORDERED: "Ordered",
@@ -131,9 +132,9 @@ export default async function PortalPage({ params, searchParams }: { params: Pro
         {photosFeed.length > 0 && (
           <div className="-mx-1 mb-4 flex snap-x gap-2 overflow-x-auto px-1">
             {photosFeed.map((ph) => (
-              <a key={ph.id} href={ph.url} target="_blank" className="shrink-0 snap-start">
+              <a key={ph.id} href={portalFileUrl(ph.url, token)} target="_blank" className="shrink-0 snap-start">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={ph.url} alt={ph.caption ?? "Site photo"} className="h-32 w-32 rounded-xl object-cover" />
+                <img src={portalFileUrl(ph.url, token)} alt={ph.caption ?? "Site photo"} className="h-32 w-32 rounded-xl object-cover" />
               </a>
             ))}
           </div>
@@ -155,7 +156,7 @@ export default async function PortalPage({ params, searchParams }: { params: Pro
         <div className="grid gap-4 sm:grid-cols-2">
           {latest.map((d) => (
             <div key={d.id} className="rounded-xl border border-line p-3">
-              <DesignThumb url={d.fileUrl} type={d.fileType} title={d.title} />
+              <DesignThumb url={portalFileUrl(d.fileUrl, token)} type={d.fileType} title={d.title} />
               <div className="mt-2 flex items-start justify-between gap-2">
                 <div>
                   <p className="font-semibold">{d.title}</p>
