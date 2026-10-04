@@ -80,3 +80,8 @@ export const deskGuide: Record<Role, { focus: string; example: string }> = {
 export function officeScope(user: { role: Role; officeId: string | null }) {
   return user.role === "OWNER" || user.role === "ADMIN" || user.role === "PROCUREMENT" ? null : user.officeId;
 }
+
+/** Owner and admin can add leads and contractors by voice on the desk. */
+export function canIntake(role: Role) {
+  return role === "OWNER" || role === "ADMIN";
+}

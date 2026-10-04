@@ -1,15 +1,40 @@
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { db, milestones, orders, projects, siteUpdates, stages } from "@/db";
 import { requireUser } from "@/lib/auth";
-import { can, defaultSendToClient, deskGuide, officeScope } from "@/lib/permissions";
+import { can, canIntake, defaultSendToClient, deskGuide, officeScope } from "@/lib/permissions";
+import Link from "next/link";
+import { IntakeDesk } from "./intake-desk";
 import { whatsappConfigured } from "@/lib/whatsapp";
 import { dateTime } from "@/lib/format";
 import { Badge } from "@/components/ui";
 import { VoiceDesk, type ProjectSnapshot } from "./voice-desk";
 
-export default async function DeskPage({ searchParams }: { searchParams: Promise<{ project?: string }> }) {
+export default async function DeskPage({ searchParams }: { searchParams: Promise<{ project?: string; mode?: string }> }) {
   const user = await requireUser("voice");
-  const { project: preselect } = await searchParams;
+  const { project: preselect, mode } = await searchParams;
+  const intake = canIntake(user.role);
+  const switcher = intake ? (
+    <div className="flex gap-1 rounded-full bg-paper p-1 text-xs font-semibold shadow-sm">
+      {[
+        ["", "Project update"],
+        ["lead", "New lead"],
+        ["contractor", "New contractor"],
+      ].map(([key, label]) => (
+        <Link key={key} href={key ? `/desk?mode=${key}` : "/desk"} className={`flex-1 rounded-full px-3 py-2 text-center ${(mode ?? "") === key ? "bg-ink text-paper" : "text-muted"}`}>
+          {label}
+        </Link>
+      ))}
+    </div>
+  ) : null;
+  if (intake && (mode === "lead" || mode === "contractor")) {
+    const officeRows = await db.query.offices.findMany();
+    return (
+      <div className="grid gap-4">
+        {switcher}
+        <IntakeDesk key={mode} kind={mode} offices={officeRows.map((o) => ({ id: o.id, name: o.name }))} serverSpeech={!!process.env.OPENAI_API_KEY} />
+      </div>
+    );
+  }
   const scope = officeScope(user);
   const showStages = can(user.role, "stages") || can(user.role, "design");
   const rows = await db.query.projects.findMany({
@@ -47,6 +72,7 @@ export default async function DeskPage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="grid gap-5">
+      {switcher}
       <VoiceDesk
         projects={rows.map((p) => ({ id: p.id, name: p.name, client: p.client.name, code: p.code, lat: p.siteLat, lng: p.siteLng }))}
         preselected={rows.some((p) => p.id === preselect)}

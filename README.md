@@ -38,6 +38,7 @@ The Voice Desk is a separate, phone-friendly app with its own sign-in page at **
 
 - **Site supervisors, procurement and accounts** use only the Voice Desk. If they open the CRM, they're sent to the desk.
 - **Owner, admin and designers** keep the full CRM and can open the desk from it.
+- **New lead / New contractor by voice** (owner and admin): switch the desk to *New lead* or *New contractor* and just talk. The assistant fills the form, then asks out loud for each detail that's missing (name, phone, city, property type, budget, source, follow-up date, office, notes — or trade, rates and UPI/bank details for contractors) until everything is filled. Hands-free mode listens again after each question. It warns if the phone number already belongs to a lead, client or contractor. Works without AI too (fills field by field from your answers).
 - **No signal on site?** Record as usual: the update and photos are kept on the phone and listed as *Saved on this phone*. Tap **Send now** when back online. Open the desk once with signal so it also opens offline.
 - **Nearest site:** tap *Nearest site* to pick the project you're standing at (within 1 km). The first time at a site, tap *Save my current location as the site*.
 - **Procurement** tab (procurement, owner, admin): vendors, purchase orders and shipments.
