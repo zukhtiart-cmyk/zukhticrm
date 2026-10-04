@@ -268,7 +268,12 @@ export function VoiceDesk({
   const [dictLang, setDictLang] = useState("en-IN");
   const recognition = useRef<SpeechRec | null>(null);
   const [dictationSupported, setDictationSupported] = useState(true);
-  useEffect(() => setDictationSupported(!!getSpeechRecognition()), []);
+  useEffect(() => {
+    const supported = !!getSpeechRecognition();
+    setDictationSupported(supported);
+    // Prefer the phone's own voice typing: free, works in Hindi/English/Arabic and needs no extra service.
+    if (supported) setUseServerSpeech(false);
+  }, []);
 
   const project = projects.find((p) => p.id === projectId);
   const audioSrc = useMemo(
@@ -398,10 +403,24 @@ export function VoiceDesk({
       setRecording(true);
       setSeconds(0);
       timer.current = setInterval(() => setSeconds((s) => s + 1), 1000);
-    } catch {
-      setError(
-        "Microphone not available. Allow mic access in your browser, or type the update below.",
-      );
+    } catch (e) {
+      const name = (e as Error)?.name;
+      if (name === "NotAllowedError" || name === "SecurityError")
+        setError(
+          "Microphone permission is off for this site. On iPhone: tap “aA” in the address bar → Website Settings → Microphone → Allow. Or use phone voice typing / type the update.",
+        );
+      else if (
+        !navigator.mediaDevices?.getUserMedia ||
+        name === "NotSupportedError"
+      )
+        setError(
+          "This browser can't record voice notes — switched to phone voice typing.",
+        );
+      else
+        setError(
+          `Microphone not available (${name || "unknown"}). Try phone voice typing, or type the update below.`,
+        );
+      if (getSpeechRecognition()) setUseServerSpeech(false);
     }
   }
 
@@ -737,6 +756,10 @@ export function VoiceDesk({
             ← Back to recording
           </button>
           <h1 className="h-display text-3xl">Check before saving</h1>
+          <p className="mt-2 rounded-xl bg-brass-soft px-3 py-2 text-sm font-semibold text-brass">
+            Not saved yet — check below, then tap “Confirm &amp; save” at the
+            bottom.
+          </p>
           <p className="text-sm text-muted">
             {project?.name} — edit anything the AI got wrong, untick what
             shouldn&apos;t be saved.
@@ -1429,9 +1452,11 @@ export function VoiceDesk({
             bubble={
               listening
                 ? "I'm listening…"
-                : dictationSupported
-                  ? `What happened on site? e.g. “${guide.example}” — your words appear in the box below.`
-                  : "Voice typing isn't supported in this browser — tap the box below and use the 🎤 on your keyboard."
+                : typed.trim()
+                  ? "Got it! Tap me again to add more, add photos if you like, then tap Continue below to check and save."
+                  : dictationSupported
+                    ? `What happened on site? e.g. “${guide.example}” — your words appear in the box below.`
+                    : "Voice typing isn't supported in this browser — tap the box below and use the 🎤 on your keyboard."
             }
             userText={listening && interim ? interim : undefined}
             hint={
@@ -1546,7 +1571,7 @@ export function VoiceDesk({
             uploading ||
             (!audio && !typed.trim())
           }
-          className="btn-primary w-full py-3.5 text-base shadow-lg"
+          className={`btn-primary w-full py-3.5 text-base shadow-lg ${(audio || typed.trim()) && !busy && !listening && !recording ? "ring-4 ring-brass/40" : ""}`}
         >
           {busy ? <Loader2 className="animate-spin" size={18} /> : null}
           {busy
@@ -1554,7 +1579,7 @@ export function VoiceDesk({
             : uploading
               ? "Uploading photos…"
               : online
-                ? "Continue"
+                ? "Continue — check & save"
                 : "Save on this phone"}
         </button>
       </div>
