@@ -72,7 +72,7 @@ export function Zuki({
       {/* Speech bubble */}
       <div
         key={bubble}
-        className="zk-bubble relative mb-3 w-full max-w-sm rounded-2xl border border-line bg-paper px-4 py-3 text-center text-[15px] leading-snug shadow-sm"
+        className={`zk-bubble relative mb-3 w-full max-w-sm whitespace-pre-line rounded-2xl border border-line bg-paper px-4 py-3 leading-snug shadow-sm ${bubble.length > 140 ? "text-left text-sm" : "text-center text-[15px]"}`}
       >
         {state === "thinking" ? (
           <span className="inline-flex gap-1 py-1" aria-label="Thinking">

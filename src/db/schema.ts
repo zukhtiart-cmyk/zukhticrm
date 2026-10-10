@@ -487,6 +487,19 @@ export const contractorPayments = pgTable("contractor_payments", {
   createdAt: created(),
 });
 
+/** Zuki on WhatsApp: what a staff member is in the middle of (one row per person). */
+export const assistantSessions = pgTable("assistant_sessions", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** AssistantAction[] plus WhatsApp-only extras (photo media ids, project-update proposals). */
+  state: jsonb("state").notNull().default({}),
+  awaitingConfirm: boolean("awaiting_confirm").notNull().default(false),
+  /** Recent WhatsApp message ids, so a retried webhook isn't processed twice. */
+  seenIds: jsonb("seen_ids").$type<string[]>().notNull().default([]),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Punch-list items before (and after) handover. */
 export const snags = pgTable("snags", {
   id: id(),

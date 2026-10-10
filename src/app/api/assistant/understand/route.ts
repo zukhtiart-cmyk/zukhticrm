@@ -3,40 +3,35 @@ import { eq } from "drizzle-orm";
 import { db, users } from "@/db";
 import { getSession } from "@/lib/auth";
 import { can } from "@/lib/permissions";
-import {
-  aiPlan,
-  assistantContext,
-  basicPlan,
-  BLOCKED_TEXT,
-  finalize,
-} from "@/lib/assistant";
-import {
-  ACTION_LABEL,
-  type AssistantAction,
-  type AssistantReply,
-} from "@/lib/assistant-types";
-import { shortAiReason } from "@/lib/ai-errors";
+import { assistantContext } from "@/lib/assistant";
+import { planTurn } from "@/lib/assistant-core";
+import type { AssistantAction, AssistantReply } from "@/lib/assistant-types";
 import { transcribe } from "@/lib/voice-ai";
 
 export const maxDuration = 60;
 
-/**
- * Zuki, the one-point assistant: takes what was said (plus the actions so far) and returns the
- * updated actions and the next question. Nothing is saved here.
- */
-export async function POST(req: Request) {
+async function currentUser() {
   const session = await getSession();
   const user = session
     ? await db.query.users.findFirst({ where: eq(users.id, session.userId) })
     : null;
-  if (!user || !user.active || !can(user.role, "voice"))
+  return user && user.active && can(user.role, "voice") ? user : null;
+}
+
+/**
+ * Zuki, the one-point assistant: takes what was said (or a photo) plus the actions so far, and returns the
+ * updated actions, answers to any questions, and the next question. Nothing is saved here.
+ */
+export async function POST(req: Request) {
+  const user = await currentUser();
+  if (!user)
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
 
   const form = await req.formData();
-  let current: AssistantAction[] = [];
+  let actions: AssistantAction[] = [];
   try {
     const raw = JSON.parse(String(form.get("actions") ?? "[]"));
-    if (Array.isArray(raw)) current = raw.slice(0, 10);
+    if (Array.isArray(raw)) actions = raw.slice(0, 10);
   } catch {}
   let asking: AssistantReply["asking"] = null;
   try {
@@ -50,11 +45,21 @@ export async function POST(req: Request) {
       .filter(Boolean)
       .map(Number),
   );
+  const photoField = form.get("photo");
+  const photo =
+    photoField instanceof File && photoField.size > 0 ? photoField : null;
+  if (
+    photo &&
+    (!photo.type.startsWith("image/") || photo.size > 15 * 1024 * 1024)
+  )
+    return NextResponse.json(
+      { error: "Send a photo under 15 MB." },
+      { status: 400 },
+    );
 
   let text = String(form.get("text") ?? "")
     .trim()
     .slice(0, 4000);
-  let notice: string | undefined;
   const audio = form.get("audio");
   if (audio instanceof File && audio.size > 0) {
     try {
@@ -68,78 +73,28 @@ export async function POST(req: Request) {
         .filter(Boolean)
         .join(" ");
     } catch (e) {
-      if (!text)
+      if (!text && !photo)
         return NextResponse.json(
           { error: (e as Error).message, speechFailed: true },
           { status: 502 },
         );
     }
   }
-  if (!text)
+  if (!text && !photo)
     return NextResponse.json(
       { error: "Nothing was heard — try again or type it." },
       { status: 400 },
     );
 
-  const ctx = await assistantContext(user);
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-  }).format(new Date());
-  let plan: { reply: string; actions: AssistantAction[] };
-  if (process.env.ANTHROPIC_API_KEY) {
-    try {
-      plan = await aiPlan(text, current, asking, ctx, user, today);
-    } catch (e) {
-      console.error("assistant AI failed", e);
-      notice = `AI is unavailable right now (${shortAiReason(e)}), so basic mode is used — check the cards before saving.`;
-      plan = basicPlan(text, current, asking, ctx);
-    }
-  } else plan = basicPlan(text, current, asking, ctx);
-
-  const { actions, missing, blocked } = await finalize(
-    plan.actions,
-    ctx,
-    photos,
+  return NextResponse.json(
+    await planTurn(user, { text, actions, asking, photos, photo }),
   );
-  const first = missing[0] ?? null;
-  const blockedText = [...new Set(blocked)]
-    .map((t) => BLOCKED_TEXT[t])
-    .filter(Boolean)
-    .join(" ");
-  let reply: string;
-  if (first) reply = [blockedText, first.question].filter(Boolean).join(" ");
-  else if (actions.length)
-    reply = [
-      blockedText,
-      plan.reply,
-      `Check ${actions.length > 1 ? `these ${actions.length} items` : `the ${ACTION_LABEL[actions[0].type].toLowerCase()}`} and tap Confirm.`,
-    ]
-      .filter(Boolean)
-      .join(" ");
-  else
-    reply =
-      blockedText ||
-      "Sorry, I didn't get what to do. Try e.g. “Paid 5,000 cash to Ramesh for Shah residence”.";
-
-  const out: AssistantReply & { context: typeof ctx } = {
-    reply,
-    actions,
-    missing,
-    asking: first ? { index: first.index, field: first.field } : null,
-    heard: text,
-    notice,
-    context: ctx,
-  };
-  return NextResponse.json(out);
 }
 
-/** Projects, contractors and allowed actions for the assistant panel's dropdowns. */
+/** Projects, contractors, work orders and allowed actions for the panel's dropdowns. */
 export async function GET() {
-  const session = await getSession();
-  const user = session
-    ? await db.query.users.findFirst({ where: eq(users.id, session.userId) })
-    : null;
-  if (!user || !user.active || !can(user.role, "voice"))
+  const user = await currentUser();
+  if (!user)
     return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   return NextResponse.json(await assistantContext(user));
 }

@@ -15,7 +15,8 @@ const n = (v: FormDataEntryValue | null) => {
   return Number.isFinite(x) ? x : 0;
 };
 const opt = (v: FormDataEntryValue | null) => String(v ?? "").trim() || null;
-const day = (v: FormDataEntryValue | null) => (v ? new Date(`${v}T10:00:00`) : null);
+const day = (v: FormDataEntryValue | null) =>
+  v ? new Date(`${v}T10:00:00`) : null;
 
 // ---------- Vendors ----------
 
@@ -32,7 +33,9 @@ export async function saveVendor(_: unknown, form: FormData) {
     phone: opt(form.get("phone")),
     email: opt(form.get("email")),
     currency: String(form.get("currency") ?? "CNY").toUpperCase(),
-    leadTimeDays: form.get("leadTimeDays") ? Math.round(n(form.get("leadTimeDays"))) : null,
+    leadTimeDays: form.get("leadTimeDays")
+      ? Math.round(n(form.get("leadTimeDays")))
+      : null,
     notes: opt(form.get("notes")),
     active: form.get("active") !== "off",
   };
@@ -45,7 +48,9 @@ export async function saveVendor(_: unknown, form: FormData) {
 
 // ---------- Purchase orders ----------
 
-export async function createPo(input: NewPo): Promise<{ error: string } | undefined> {
+export async function createPo(
+  input: NewPo,
+): Promise<{ error: string } | undefined> {
   const user = await requireUser("orders");
   const res = await createPurchaseOrder(user, input);
   if ("error" in res) return res;
@@ -58,9 +63,16 @@ export async function createPo(input: NewPo): Promise<{ error: string } | undefi
 export async function updatePo(form: FormData) {
   const user = await requireUser("orders");
   const poNumber = String(form.get("poNumber"));
-  const lines = await db.query.orders.findMany({ where: eq(orders.poNumber, poNumber), with: { project: true } });
+  const lines = await db.query.orders.findMany({
+    where: eq(orders.poNumber, poNumber),
+    with: { project: true },
+  });
   const scope = officeScope(user);
-  if (!lines.length || (scope && lines.some((l) => l.project.officeId !== scope))) return;
+  if (
+    !lines.length ||
+    (scope && lines.some((l) => l.project.officeId !== scope))
+  )
+    return;
   const status = z.enum(orderStatusEnum.enumValues).parse(form.get("status"));
   const now = new Date();
   for (const l of lines) {
@@ -71,13 +83,16 @@ export async function updatePo(form: FormData) {
         eta: form.get("eta") ? day(form.get("eta")) : l.eta,
         containerNo: opt(form.get("containerNo")) ?? l.containerNo,
         port: opt(form.get("port")) ?? l.port,
-        shippedAt: ["SHIPPED", "CUSTOMS", "DELIVERED"].includes(status) ? (l.shippedAt ?? now) : null,
+        shippedAt: ["SHIPPED", "CUSTOMS", "DELIVERED"].includes(status)
+          ? (l.shippedAt ?? now)
+          : null,
         deliveredAt: status === "DELIVERED" ? (l.deliveredAt ?? now) : null,
       })
       .where(eq(orders.id, l.id));
   }
   revalidatePath("/desk/procurement", "layout");
-  for (const pid of new Set(lines.map((l) => l.projectId))) revalidatePath(`/projects/${pid}`, "layout");
+  for (const pid of new Set(lines.map((l) => l.projectId)))
+    revalidatePath(`/projects/${pid}`, "layout");
 }
 
 // ---------- Exchange rates ----------
@@ -91,9 +106,14 @@ export async function saveFxRates(form: FormData) {
     const x = Number(v);
     if (/^[A-Z]{3}$/.test(code) && x > 0) perINR[code] = x;
   }
-  const extra = String(form.get("newCode") ?? "").trim().toUpperCase();
+  const extra = String(form.get("newCode") ?? "")
+    .trim()
+    .toUpperCase();
   const extraRate = Number(form.get("newRate"));
   if (/^[A-Z]{3}$/.test(extra) && extraRate > 0) perINR[extra] = extraRate;
-  await setSetting("fxRates", { asOf: new Date().toISOString().slice(0, 10), perINR });
+  await setSetting("fxRates", {
+    asOf: new Date().toISOString().slice(0, 10),
+    perINR,
+  });
   revalidatePath("/rates");
 }

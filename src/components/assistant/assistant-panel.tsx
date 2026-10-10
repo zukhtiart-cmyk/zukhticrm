@@ -62,7 +62,7 @@ const isIOS = () =>
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
 
 const GREETING =
-  "Hi! Tell me anything — a site update, a payment to a contractor, a site expense, a snag, a new lead or contractor. I'll put it in the right place.";
+  "Hi! Tell me anything — a site update, a payment, an expense, a snag, a new lead — or ask me a question like “What's Ramesh's balance?”. You can also send me a photo of a bill or a problem.";
 const KIND_LABEL: Record<string, string> = {
   ADVANCE: "Advance",
   WAGES: "Wages",
@@ -96,9 +96,16 @@ function clientMissing(
                 ["projectId", "Project"],
                 ["description", "Details"],
               ]
-            : a.type === "project_update"
+            : a.type === "project_update" || a.type === "measurements"
               ? [["projectId", "Project"]]
-              : [];
+              : a.type === "bill"
+                ? [
+                    ["contractorId", "Contractor"],
+                    ["projectId", "Project"],
+                    ["amount", "Amount"],
+                    ["workOrderId", "Work order"],
+                  ]
+                : [];
     for (const [f, label] of need) {
       const v = (a as Record<string, unknown>)[f];
       if (v === null || v === undefined || v === "")
@@ -159,16 +166,17 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     });
   }
 
-  async function send(text: string) {
-    if (!text.trim()) return;
+  async function send(text: string, photo?: File) {
+    if (!text.trim() && !photo) return;
     setBusy(true);
     setError(null);
     setResults(null);
-    setHeard(text.trim());
+    setHeard(photo ? `📷 ${text.trim() || "Reading the photo…"}` : text.trim());
     const s = stateRef.current;
     try {
       const body = new FormData();
       body.set("text", text.trim());
+      if (photo) body.set("photo", photo);
       body.set("actions", JSON.stringify(s.actions));
       body.set("asking", JSON.stringify(s.asking));
       body.set(
@@ -192,11 +200,13 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
           await new Promise((r) => setTimeout(r, 1500));
         }
       }
-      const json = (await res!
-        .json()
-        .catch(() => ({
-          error: `Something went wrong (${res!.status})`,
-        }))) as AssistantReply & { error?: string; context?: AssistantContext };
+      const json = (await res!.json().catch(() => ({
+        error: `Something went wrong (${res!.status})`,
+      }))) as AssistantReply & {
+        error?: string;
+        context?: AssistantContext;
+        attachPhotoTo?: number;
+      };
       if (!res!.ok) throw new Error(json.error || "Something went wrong");
       if (json.context) setCtx(json.context);
       // Photos belong to positions; drop any whose action disappeared.
@@ -205,6 +215,12 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
           Object.entries(p).filter(([k]) => Number(k) < json.actions.length),
         ),
       );
+      if (
+        photo &&
+        json.attachPhotoTo !== undefined &&
+        json.attachPhotoTo !== null
+      )
+        setPhotos((p) => ({ ...p, [json.attachPhotoTo!]: photo }));
       setActions(json.actions);
       setAsking(json.asking);
       setNotice(json.notice ?? null);
@@ -212,7 +228,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
       say(json.reply);
     } catch (e) {
       setError((e as Error).message);
-      setTyped(text.trim());
+      if (text.trim()) setTyped(text.trim());
     } finally {
       setBusy(false);
     }
@@ -478,7 +494,9 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
                   {(a.type === "payment" ||
                     a.type === "expense" ||
                     a.type === "snag" ||
-                    a.type === "project_update") && (
+                    a.type === "project_update" ||
+                    a.type === "bill" ||
+                    a.type === "measurements") && (
                     <select
                       value={a.projectId ?? ""}
                       onChange={(e) =>
@@ -663,7 +681,8 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
 
                   {(a.type === "snag" ||
                     a.type === "payment" ||
-                    a.type === "expense") && (
+                    a.type === "expense" ||
+                    a.type === "bill") && (
                     <div className="mt-2 flex items-center gap-2">
                       <label
                         className={`flex cursor-pointer items-center gap-2 rounded-xl border border-dashed px-3 py-2 text-xs font-semibold ${a.type === "snag" && miss("photo") ? "border-brass text-brass" : "border-line text-muted"} ${focus("photo")}`}
@@ -745,6 +764,97 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
                           ? "Stages, client payments, orders and visits are checked on the update screen before saving."
                           : "I'll fill the form with what you said and ask for anything missing."}
                       </p>
+                    </>
+                  )}
+
+                  {a.type === "bill" && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={a.contractorId ?? ""}
+                        onChange={(e) =>
+                          patch(i, {
+                            contractorId: e.target.value || null,
+                            workOrderId: null,
+                          })
+                        }
+                        className={`input col-span-2 py-1.5 ${focus("contractorId")}`}
+                        aria-label="Contractor"
+                      >
+                        <option value="">
+                          {a.contractorName
+                            ? `“${a.contractorName}” — choose…`
+                            : "Contractor…"}
+                        </option>
+                        {ctx?.contractors.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.trade})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={a.amount ?? ""}
+                        onChange={(e) =>
+                          patch(i, {
+                            amount: e.target.value
+                              ? Number(e.target.value)
+                              : null,
+                          })
+                        }
+                        placeholder="Bill amount"
+                        className={`input py-1.5 ${focus("amount")}`}
+                        aria-label="Bill amount"
+                      />
+                      <select
+                        value={a.workOrderId ?? ""}
+                        onChange={(e) =>
+                          patch(i, { workOrderId: e.target.value || null })
+                        }
+                        className={`input py-1.5 ${focus("workOrderId")}`}
+                        aria-label="Work order"
+                      >
+                        <option value="">Work order…</option>
+                        {ctx?.workOrders
+                          .filter(
+                            (w) =>
+                              w.contractorId === a.contractorId &&
+                              w.projectId === a.projectId,
+                          )
+                          .map((w) => (
+                            <option key={w.id} value={w.id}>
+                              {w.number} · {w.title}
+                            </option>
+                          ))}
+                      </select>
+                      <input
+                        value={a.note ?? ""}
+                        onChange={(e) =>
+                          patch(i, { note: e.target.value || null })
+                        }
+                        placeholder="Work covered"
+                        className="input col-span-2 py-1.5"
+                        aria-label="Work covered"
+                      />
+                    </div>
+                  )}
+
+                  {a.type === "measurements" && (
+                    <>
+                      <p className="whitespace-pre-line rounded-lg bg-ivory px-2 py-1.5 text-xs">
+                        {a.text}
+                      </p>
+                      <button
+                        type="button"
+                        disabled={!a.projectId}
+                        onClick={() => {
+                          onClose();
+                          router.push(handoffHref(a));
+                        }}
+                        className="btn-brass mt-2 w-full py-2 text-xs"
+                      >
+                        Draft BOQ for {projectName(a.projectId) ?? "project"} →
+                      </button>
                     </>
                   )}
 
@@ -836,6 +946,29 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             }}
             className="flex gap-2"
           >
+            <label
+              className={`grid w-11 shrink-0 cursor-pointer place-items-center rounded-xl border border-line bg-paper text-brass ${busy ? "pointer-events-none opacity-50" : ""}`}
+              title="Snap a bill, contractor bill, measurement sheet or a problem on site"
+              aria-label="Send a photo to Zuki"
+            >
+              <Camera size={18} />
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) {
+                    primeSpeech();
+                    const t = typed;
+                    setTyped("");
+                    send(t, f);
+                  }
+                }}
+              />
+            </label>
             <input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}

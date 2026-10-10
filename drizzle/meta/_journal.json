@@ -50,6 +50,13 @@
       "when": 1791115897068,
       "tag": "0006_payouts",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791621397347,
+      "tag": "0007_assistant_sessions",
+      "breakpoints": true
     }
   ]
 }

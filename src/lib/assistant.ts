@@ -22,15 +22,30 @@ const NEEDS: Partial<Record<ActionType, Capability>> = {
   expense: "expenses",
   snag: "snags",
   project_update: "voice",
+  bill: "contractors",
+  measurements: "boq",
+  question: "voice",
 };
 
 export async function assistantContext(user: U): Promise<AssistantContext> {
-  const [projects, contractors] = await Promise.all([
+  const [projects, contractors, openWos] = await Promise.all([
     scopedProjects(user, true),
     can(user.role, "payouts") ||
     can(user.role, "snags") ||
     can(user.role, "contractors")
       ? scopedContractors(user)
+      : Promise.resolve([]),
+    can(user.role, "contractors")
+      ? db
+          .select({
+            id: workOrders.id,
+            number: workOrders.number,
+            title: workOrders.title,
+            contractorId: workOrders.contractorId,
+            projectId: workOrders.projectId,
+          })
+          .from(workOrders)
+          .where(eq(workOrders.status, "OPEN"))
       : Promise.resolve([]),
   ]);
   const allowed = (
@@ -42,11 +57,14 @@ export async function assistantContext(user: U): Promise<AssistantContext> {
       "new_lead",
       "new_contractor",
       "open",
+      "bill",
+      "measurements",
+      "question",
     ] as ActionType[]
   ).filter((t) =>
     t === "new_lead" || t === "new_contractor"
       ? canIntake(user.role)
-      : t === "open"
+      : t === "open" || t === "question"
         ? true
         : can(user.role, NEEDS[t]!),
   );
@@ -67,6 +85,9 @@ export async function assistantContext(user: U): Promise<AssistantContext> {
     contractors: contractors
       .filter((c) => c.active)
       .map((c) => ({ id: c.id, name: c.name, trade: c.trade })),
+    workOrders: openWos.filter((w) =>
+      projects.some((p) => p.id === w.projectId),
+    ),
     allowed,
   };
 }
@@ -99,6 +120,9 @@ const PLAN_TOOL = {
                 "new_lead",
                 "new_contractor",
                 "open",
+                "bill",
+                "measurements",
+                "question",
               ],
             },
             project_id: {
@@ -150,7 +174,11 @@ const PLAN_TOOL = {
             text: {
               type: "string",
               description:
-                "project_update / new_lead / new_contractor: the exact part of what was said that belongs to this action.",
+                "project_update / new_lead / new_contractor / question / measurements: the exact part of what was said that belongs to this action.",
+            },
+            work_order_id: {
+              type: "string",
+              description: "bill: exact work order id from the list, if clear.",
             },
           },
           required: ["type"],
@@ -172,6 +200,9 @@ Action types (only these are allowed for this person: ${ctx.allowed.join(", ")})
 - new_lead: a new client enquiry to add. Put the spoken words in "text".
 - new_contractor: a new contractor/labourer to add to the system. Put the spoken words in "text".
 - open: they want to see/open a project or contractor page.
+- bill: a contractor's RUNNING BILL submitted for work done (not a payment). Needs contractor, project, amount; work order if more than one is open.
+- measurements: room sizes / site measurements to use for a BOQ. Put the sizes in "text".
+- question: they are ASKING something (balance, pending, status, snags, who hasn't updated, money this week…). Put the question in "text". Don't create other actions for a question.
 Rules:
 - You receive the CURRENT actions (from earlier in this conversation). Return the FULL updated list: keep them, fill in what the new words answer, change only what the speaker corrects. If they were asked a question, the new words most likely answer it.
 - One utterance can contain several actions.
@@ -181,7 +212,9 @@ Rules:
 Projects (id | name | client):
 ${ctx.projects.map((p) => `${p.id} | ${p.name} | ${p.client}`).join("\n") || "(none)"}
 Contractors (id | name | trade):
-${ctx.contractors.map((c) => `${c.id} | ${c.name} | ${c.trade}`).join("\n") || "(none)"}`;
+${ctx.contractors.map((c) => `${c.id} | ${c.name} | ${c.trade}`).join("\n") || "(none)"}
+Open work orders (id | number | title | contractor id | project id):
+${ctx.workOrders.map((w) => `${w.id} | ${w.number} | ${w.title} | ${w.contractorId} | ${w.projectId}`).join("\n") || "(none)"}`;
 }
 
 type RawAction = {
@@ -200,6 +233,7 @@ type RawAction = {
   room?: string;
   photo_skipped?: boolean;
   text?: string;
+  work_order_id?: string;
 };
 
 function toRaw(a: AssistantAction): RawAction {
@@ -219,6 +253,7 @@ function toRaw(a: AssistantAction): RawAction {
     room: a.room ?? "",
     photo_skipped: a.photoSkipped ?? false,
     text: a.text ?? "",
+    work_order_id: a.workOrderId ?? "",
   };
 }
 
@@ -271,6 +306,7 @@ function fromRaw(r: RawAction): AssistantAction {
     room: s(r.room),
     photoSkipped: !!r.photo_skipped,
     text: s(r.text),
+    workOrderId: s(r.work_order_id),
   };
 }
 
@@ -382,8 +418,20 @@ const ROOMS = [
   "wardrobe",
 ];
 
+export function looksLikeQuestion(text: string) {
+  const t = text.trim().toLowerCase();
+  return (
+    /\?\s*$/.test(t) ||
+    /^(what|what's|whats|how much|how many|which|who|when|where|is there|are there|do we|did we|have we|tell me|show me|give me|list|kitna|kitne|kitni|kaun|kya|kab|kahan|bata|batao|dikhao)\b/.test(
+      t,
+    ) ||
+    /\b(balance|kitna baaki|kitna pending|status kya|pending kitna)\b/.test(t)
+  );
+}
+
 function classify(text: string): ActionType {
   const t = text.toLowerCase();
+  if (looksLikeQuestion(text)) return "question";
   if (/\b(new lead|naya lead|new enquiry|new inquiry|new client)\b/.test(t))
     return "new_lead";
   if (
@@ -416,6 +464,13 @@ function classify(text: string): ActionType {
     )
   )
     return "expense";
+  if (
+    /\b(bill|ra ?\d|running bill)\b/.test(t) &&
+    /\b(contractor|carpenter|painter|electrician|plumber|billed|submitted|diya)\b/.test(
+      t,
+    )
+  )
+    return "bill";
   if (/\b(open|show|dikhao)\b/.test(t)) return "open";
   return "project_update";
 }
@@ -485,6 +540,13 @@ export function basicPlan(
     a.contractorId = contractor?.id ?? null;
   } else if (type === "open") {
     a.contractorId = contractor?.id ?? null;
+  } else if (type === "bill") {
+    a.contractorId = contractor?.id ?? null;
+    a.amount = amount;
+    a.note = text.trim().slice(0, 300);
+  } else if (type === "question") {
+    a.text = text.trim();
+    a.contractorId = contractor?.id ?? null;
   } else {
     a.text = text.trim();
   }
@@ -506,9 +568,17 @@ const Q = {
   contractorId: (a: AssistantAction) =>
     a.contractorName
       ? `I couldn't find “${a.contractorName}” in your contractors. Which contractor was it? (Add them first if they're new.)`
-      : "Which contractor or labourer did you pay?",
+      : a.type === "bill"
+        ? "Which contractor's bill is this?"
+        : "Which contractor or labourer did you pay?",
   amount: (a: AssistantAction) =>
-    a.type === "payment" ? "How much did you pay?" : "How much was spent?",
+    a.type === "payment"
+      ? "How much did you pay?"
+      : a.type === "bill"
+        ? "What's the bill amount?"
+        : "How much was spent?",
+  workOrderId: () =>
+    "Which work order is this bill for? Choose it on the card.",
   mode: () => "How was it paid — cash, UPI, bank transfer or cheque?",
   description: (a: AssistantAction) =>
     a.type === "snag"
@@ -524,6 +594,7 @@ const LABEL: Record<string, string> = {
   mode: "Paid by",
   description: "Details",
   photo: "Photo",
+  workOrderId: "Work order",
 };
 
 /** Cleans ids against what this person may see, attaches matching bills, and lists what's missing. */
@@ -551,6 +622,23 @@ export async function finalize(
       !(EXPENSE_CATEGORIES as readonly string[]).includes(a.category)
     )
       a.category = "Other";
+    if (
+      a.workOrderId &&
+      !ctx.workOrders.some(
+        (w) =>
+          w.id === a.workOrderId &&
+          w.contractorId === a.contractorId &&
+          w.projectId === a.projectId,
+      )
+    )
+      a.workOrderId = null;
+    if (a.type === "bill" && !a.workOrderId && a.contractorId && a.projectId) {
+      // One open work order for this contractor on this project: bill it there.
+      const wos = ctx.workOrders.filter(
+        (w) => w.contractorId === a.contractorId && w.projectId === a.projectId,
+      );
+      if (wos.length === 1) a.workOrderId = wos[0].id;
+    }
     if (a.type === "open") {
       a.href = a.projectId
         ? `/projects/${a.projectId}`
@@ -604,7 +692,10 @@ export async function finalize(
       need.push("contractorId", "projectId", "amount", "mode");
     if (a.type === "expense") need.push("projectId", "amount", "description");
     if (a.type === "snag") need.push("projectId", "description");
-    if (a.type === "project_update") need.push("projectId");
+    if (a.type === "project_update" || a.type === "measurements")
+      need.push("projectId");
+    if (a.type === "bill")
+      need.push("contractorId", "projectId", "amount", "workOrderId");
     for (const f of need) {
       const v = (a as Record<string, unknown>)[f];
       if (v === null || v === undefined || v === "")
@@ -623,6 +714,20 @@ export async function finalize(
         question: Q.photo(),
         optional: true,
       });
+    if (
+      a.type === "bill" &&
+      a.contractorId &&
+      a.projectId &&
+      !a.workOrderId &&
+      !ctx.workOrders.some(
+        (w) => w.contractorId === a.contractorId && w.projectId === a.projectId,
+      )
+    ) {
+      const m = missing.find((x) => x.index === i && x.field === "workOrderId");
+      if (m)
+        m.question =
+          "This contractor has no open work order on that project. Raise a work order first (Contractors → their page).";
+    }
     if (a.type === "open" && !a.href)
       missing.push({
         index: i,
@@ -635,6 +740,9 @@ export async function finalize(
 }
 
 export const BLOCKED_TEXT: Record<ActionType, string> = {
+  bill: "Your role can't submit contractor bills.",
+  measurements: "Only roles that prepare BOQs can use measurements.",
+  question: "",
   payment: "Only the owner and accounts can record payments to contractors.",
   expense: "Your role can't log site expenses.",
   snag: "Your role can't add snags.",

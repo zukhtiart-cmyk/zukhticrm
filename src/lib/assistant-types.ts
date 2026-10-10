@@ -7,12 +7,19 @@ export type ActionType =
   | "project_update"
   | "new_lead"
   | "new_contractor"
-  | "open";
+  | "open"
+  | "bill"
+  | "measurements"
+  | "question";
 
 export type AssistantAction = {
   type: ActionType;
   projectId?: string | null;
   contractorId?: string | null;
+  /** Contractor running bills: the work order it's billed against. */
+  workOrderId?: string | null;
+  /** Answer to a question (filled by the server). */
+  answer?: string | null;
   /** Name as spoken when no matching contractor was found. */
   contractorName?: string | null;
   amount?: number | null;
@@ -53,6 +60,13 @@ export type AssistantReply = {
 export type AssistantContext = {
   projects: { id: string; name: string; client: string; currency: string }[];
   contractors: { id: string; name: string; trade: string }[];
+  workOrders: {
+    id: string;
+    number: string;
+    title: string;
+    contractorId: string;
+    projectId: string;
+  }[];
   allowed: ActionType[];
 };
 
@@ -79,6 +93,9 @@ export const ACTION_LABEL: Record<ActionType, string> = {
   new_lead: "New lead",
   new_contractor: "New contractor",
   open: "Open",
+  bill: "Contractor running bill",
+  measurements: "Site measurements → AI BOQ",
+  question: "Question",
 };
 
 /** Actions that open the matching screen with what was said, instead of saving directly here. */
@@ -87,6 +104,8 @@ export const HANDOFF: ActionType[] = [
   "new_lead",
   "new_contractor",
   "open",
+  "measurements",
+  "question",
 ];
 
 export function handoffHref(a: AssistantAction) {
@@ -95,5 +114,7 @@ export function handoffHref(a: AssistantAction) {
     return `/desk?project=${a.projectId ?? ""}${say}`;
   if (a.type === "new_lead") return `/desk?mode=lead${say}`;
   if (a.type === "new_contractor") return `/desk?mode=contractor${say}`;
+  if (a.type === "measurements")
+    return `/projects/${a.projectId ?? ""}/boq?brief=${encodeURIComponent((a.text ?? "").slice(0, 1500))}`;
   return a.href ?? "/";
 }

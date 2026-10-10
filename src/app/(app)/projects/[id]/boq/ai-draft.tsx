@@ -23,10 +23,13 @@ export function AiBoqDraft({
   projectId,
   rates,
   currency,
+  initialBrief,
 }: {
   projectId: string;
   rates: Rate[];
   currency: string;
+  /** Sizes handed over from Zuki (e.g. a photographed measurement sheet). */
+  initialBrief?: string;
 }) {
   const [state, action, pending] = useActionState<DraftState, FormData>(
     draftBoqAction,
@@ -88,7 +91,7 @@ export function AiBoqDraft({
       )}
       <details
         className="card p-4"
-        open={!!lines.length || !!state.error || pending}
+        open={!!lines.length || !!state.error || pending || !!initialBrief}
       >
         <summary className="cursor-pointer font-semibold">
           ✨ Draft BOQ with AI{" "}
@@ -102,7 +105,8 @@ export function AiBoqDraft({
             <label className="label">Brief</label>
             <textarea
               name="brief"
-              rows={3}
+              defaultValue={initialBrief}
+              rows={initialBrief ? 6 : 3}
               className="input"
               placeholder="e.g. 3BHK, 1450 sqft carpet. Full false ceiling in living and bedrooms, modular kitchen 14 ft L-shape, wardrobes in 3 bedrooms 7×8 ft, TV unit, full repaint, lights."
             />

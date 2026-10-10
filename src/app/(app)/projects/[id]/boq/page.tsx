@@ -8,8 +8,9 @@ import { projectMargin } from "@/lib/margin";
 import { AiBoqDraft } from "./ai-draft";
 import { addBoqItem, createQuote, deleteBoqItem, setQuoteStatus, updateBoqItem } from "../../money-actions";
 
-export default async function BoqPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function BoqPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ brief?: string }> }) {
   const { id } = await params;
+  const { brief } = await searchParams;
   const { project } = await loadProject(id, "boq");
   const rates = await db.select().from(rateItems).orderBy(asc(rateItems.category), asc(rateItems.name));
   const cur = project.office.currency;
@@ -96,7 +97,7 @@ export default async function BoqPage({ params }: { params: Promise<{ id: string
         <p className="text-xs text-muted">Columns: room · item · qty · unit · unit cost (internal) · unit price (client) · amount</p>
       </Section>
 
-      <AiBoqDraft projectId={project.id} currency={cur} rates={rates.map((r) => ({ id: r.id, price: r.price }))} />
+      <AiBoqDraft initialBrief={brief?.slice(0, 3000)} projectId={project.id} currency={cur} rates={rates.map((r) => ({ id: r.id, price: r.price }))} />
 
       <Section title="Add an item">
         <form action={addBoqItem} className="grid items-end gap-2 md:grid-cols-[1fr_2fr_0.7fr_auto]">

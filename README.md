@@ -45,6 +45,19 @@ A floating Zuki button sits on every CRM and Voice Desk page. Tap it and say (or
 
 One sentence can hold several items (with AI on). Nothing is saved until you tap **Confirm & save**; each item is checked against your role and office exactly like the normal screens.
 
+**Ask Zuki questions.** “What's Ramesh's balance?”, “Who hasn't paid?”, “What's waiting for approval?”, “Which sites had no update today?”, “Open snags at Shah?”, “Follow-ups due?”, “Late orders?” — answered from live data, only showing what your role may see.
+
+**Snap a photo.** Tap the camera next to the text box:
+
+- shop bill → site expense with the bill attached
+- contractor bill → running bill against the right work order
+- measurement sheet → opens the AI BOQ draft with the measurements filled in
+- a defect on site → snag with the photo
+
+Photo reading needs the Anthropic key.
+
+**Zuki on WhatsApp (staff).** Anyone whose WhatsApp number is saved on the Team page can message the business WhatsApp number and talk to Zuki the same way — text, photos, and voice notes (voice notes need `OPENAI_API_KEY` with credit; otherwise type, or use the phone keyboard's mic). Zuki replies with what it understood; reply **YES** to save or **NO** to cancel. Project updates saved from WhatsApp are internal — send the client message from the desk. New leads, contractors and measurement sheets get a link to finish in the app.
+
 ### Voice Desk (`/desk`)
 
 The Voice Desk is a separate, phone-friendly app with its own sign-in page at **`/desk/login`**. Save it to your phone's home screen.

@@ -32,7 +32,7 @@ export default async function AdminPage() {
   ];
   return (
     <>
-      <PageHeader title="Team & offices" subtitle="Who can sign in, what they can do, and office tax settings" />
+      <PageHeader title="Team & offices" subtitle="Who can sign in, what they can do, and office tax settings. Save a team member's WhatsApp number and they can message the business number to talk to Zuki." />
       <div className="grid gap-5">
         <Section title="Add a team member">
           <AddUserForm offices={allOffices} canAddOwner={me.role === "OWNER"} />
@@ -58,7 +58,8 @@ export default async function AdminPage() {
                       <p className="text-xs text-muted">{u.email}</p>
                       <form action={setUserPhone} className="mt-1 flex gap-1">
                         <input type="hidden" name="id" value={u.id} />
-                        <input name="phone" defaultValue={u.phone ?? ""} placeholder="WhatsApp +91…" className="input w-36 py-1 text-xs" aria-label="Phone" />
+                        <input name="phone" defaultValue={u.phone ?? ""} placeholder="WhatsApp +91…"
+                          title="With a WhatsApp number saved, this person can message the business number to talk to Zuki" className="input w-36 py-1 text-xs" aria-label="Phone" />
                         <button className="btn-ghost px-2 py-1 text-xs">Save</button>
                       </form>
                     </td>
