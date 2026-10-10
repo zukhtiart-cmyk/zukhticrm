@@ -75,10 +75,13 @@ export function IntakeDesk({
   kind,
   offices,
   serverSpeech,
+  initialText,
 }: {
   kind: IntakeKind;
   offices: { id: string; name: string }[];
   serverSpeech: boolean;
+  /** Words handed over from the Zuki assistant: sent straight away. */
+  initialText?: string;
 }) {
   const defs = INTAKE_FIELDS[kind];
   const [fields, setFields] = useState<IntakeFields>({});
@@ -228,6 +231,14 @@ export function IntakeDesk({
       setBusy(false);
     }
   }
+
+  const handedOver = useRef(false);
+  useEffect(() => {
+    if (!initialText || handedOver.current) return;
+    handedOver.current = true;
+    send(initialText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialText]);
 
   function listen(auto = false) {
     const Rec = getRec();

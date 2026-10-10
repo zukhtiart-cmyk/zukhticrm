@@ -3,6 +3,7 @@ import { LogOut } from "lucide-react";
 import type { CurrentUser } from "@/lib/auth";
 import { can, isDeskOnly, roleLabels } from "@/lib/permissions";
 import { deskLogout } from "@/app/login/actions";
+import { AssistantFab } from "@/components/assistant/assistant-fab";
 
 /** Shared header for the Voice Desk app; `wide` for table screens like procurement. */
 export function DeskShell({ user, wide, active, children }: { user: CurrentUser; wide?: boolean; active: "updates" | "procurement" | "expenses" | "contractors" | "snags" | "payments"; children: React.ReactNode }) {
@@ -49,7 +50,8 @@ export function DeskShell({ user, wide, active, children }: { user: CurrentUser;
           </nav>
         )}
       </header>
-      <main className={`mx-auto ${width} px-4 pb-16 pt-5 print:max-w-none print:p-0`}>{children}</main>
+      <main className={`mx-auto ${width} px-4 pb-28 pt-5 print:max-w-none print:p-0`}>{children}</main>
+      {can(user.role, "voice") && <AssistantFab />}
     </div>
   );
 }

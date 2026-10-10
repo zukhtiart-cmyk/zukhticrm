@@ -5,6 +5,7 @@ import { Sidebar, type NavItem } from "@/components/nav";
 import { logout } from "@/app/login/actions";
 import { inboxAttentionCount } from "@/lib/wa-inbox";
 import { pendingApprovals } from "@/lib/site-ops";
+import { AssistantFab } from "@/components/assistant/assistant-fab";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -28,6 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen">
       <Sidebar items={items} userName={user.name} roleLabel={roleLabels[user.role]} office={user.office?.name ?? "All offices"} logout={logout} />
+      {can(user.role, "voice") && <AssistantFab place="crm" />}
       <main className="px-4 pb-28 pt-5 sm:px-6 lg:ml-60 lg:px-10 lg:pb-12 lg:pt-10 print:ml-0 print:p-0">
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>

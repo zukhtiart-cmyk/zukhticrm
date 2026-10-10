@@ -4,6 +4,49 @@
  * Zuki — the Voice Desk assistant. An original character: a little brass "house" with a lamp antenna.
  * States: idle (floats and blinks), speaking (mouth moves), listening (sound waves, wide eyes), thinking (looks up, dots).
  */
+/** Just Zuki's face, for the floating button. */
+export function ZukiFace({ size = 40 }: { size?: number }) {
+  return (
+    <svg viewBox="40 30 120 140" width={size} height={size} aria-hidden="true">
+      <line
+        x1="100"
+        y1="38"
+        x2="100"
+        y2="22"
+        stroke="var(--color-ink)"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+      <circle cx="100" cy="17" r="8" fill="var(--color-brass)" />
+      <path
+        d="M44 78 L100 34 L156 78 Z"
+        fill="var(--color-ink)"
+        stroke="var(--color-ink)"
+        strokeWidth="8"
+        strokeLinejoin="round"
+      />
+      <rect
+        x="48"
+        y="66"
+        width="104"
+        height="104"
+        rx="30"
+        fill="var(--color-brass)"
+      />
+      <rect x="58" y="76" width="84" height="84" rx="24" fill="#f6ead8" />
+      <ellipse cx="82" cy="112" rx="7" ry="9" fill="var(--color-ink)" />
+      <ellipse cx="118" cy="112" rx="7" ry="9" fill="var(--color-ink)" />
+      <path
+        d="M88 136 q12 10 24 0"
+        fill="none"
+        stroke="var(--color-ink)"
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export type ZukiState = "idle" | "speaking" | "listening" | "thinking";
 
 export function Zuki({
@@ -13,6 +56,7 @@ export function Zuki({
   hint,
   onTap,
   disabled,
+  size = 168,
 }: {
   state: ZukiState;
   bubble: string;
@@ -20,6 +64,7 @@ export function Zuki({
   hint: string;
   onTap: () => void;
   disabled?: boolean;
+  size?: number;
 }) {
   return (
     <div className="flex flex-col items-center">
@@ -50,7 +95,12 @@ export function Zuki({
         }
         className={`zk zk-${state} relative select-none outline-none disabled:opacity-60`}
       >
-        <svg viewBox="0 0 200 200" width="168" height="168" aria-hidden="true">
+        <svg
+          viewBox="0 0 200 200"
+          width={size}
+          height={size}
+          aria-hidden="true"
+        >
           {/* Listening waves */}
           <g
             className="zk-waves"

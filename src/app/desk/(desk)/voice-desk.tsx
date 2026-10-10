@@ -222,6 +222,7 @@ export function VoiceDesk({
   perms,
   guide,
   serverSpeech,
+  initialText,
 }: {
   projects: ProjectOption[];
   snapshots: Record<string, ProjectSnapshot>;
@@ -234,6 +235,8 @@ export function VoiceDesk({
   guide: { focus: string; example: string };
   /** True when the server can transcribe recordings (OPENAI_API_KEY set); otherwise the phone's own dictation is used. */
   serverSpeech: boolean;
+  /** Words handed over from the Zuki assistant: filled in and understood straight away. */
+  initialText?: string;
 }) {
   const [projectId, setProjectId] = useState(initialProjectId);
   const [step, setStep] = useState<"capture" | "review" | "done">("capture");
@@ -602,7 +605,7 @@ export function VoiceDesk({
     refreshQueue();
   }
 
-  async function understand(extra?: string) {
+  async function understand(extra?: string, override?: string) {
     if (!projectId) return;
     if (extra === undefined && !navigator.onLine) return saveOffline();
     setBusy(true);
@@ -615,7 +618,7 @@ export function VoiceDesk({
         body.append("earlier", result?.transcript ?? "");
         body.append("text", extra);
       } else {
-        body.append("text", typed);
+        body.append("text", override ?? typed);
         if (audio)
           body.append(
             "audio",
@@ -654,6 +657,15 @@ export function VoiceDesk({
       setBusy(false);
     }
   }
+
+  const handedOver = useRef(false);
+  useEffect(() => {
+    if (!initialText || handedOver.current || !projectId) return;
+    handedOver.current = true;
+    setTyped(initialText);
+    understand(undefined, initialText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialText, projectId]);
 
   function save() {
     if (!draft || !result) return;

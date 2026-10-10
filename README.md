@@ -32,6 +32,19 @@ Built with Next.js 15, Postgres (Drizzle ORM) and Tailwind. It's designed to run
 | **Invoices** | Issue numbered invoices from payment milestones, numbered per office and year, e.g. `MUM-2026-0007`. Each invoice is printable and shows the taxable value and GST or VAT separately. |
 | **Client portal** | See below. |
 
+### Zuki — one place to tell the CRM anything
+
+A floating Zuki button sits on every CRM and Voice Desk page. Tap it and say (or type) what happened; Zuki works out what it is and files it in the right place, asking for anything missing:
+
+- **“Paid 5,000 cash to Ramesh for Shah residence”** → payment on Ramesh's account (owner and accounts only). If it matches an approved bill, it pays that bill.
+- **“Mahesh ko 800 wages diye, GPay”** → wages on the helper's account.
+- **“Bought cement for 8,400 at Mehta site”** → site expense, waiting for approval.
+- **“Scratch on the kitchen shutter at Shah”** → snag; Zuki asks for a photo.
+- **“Carpentry 80% done at Shah, client paid 2 lakh”** → opens the project update review with it filled in.
+- **“New lead …” / “Add contractor …”** → opens the lead / contractor form and keeps asking until it's complete.
+
+One sentence can hold several items (with AI on). Nothing is saved until you tap **Confirm & save**; each item is checked against your role and office exactly like the normal screens.
+
 ### Voice Desk (`/desk`)
 
 The Voice Desk is a separate, phone-friendly app with its own sign-in page at **`/desk/login`**. Save it to your phone's home screen.
