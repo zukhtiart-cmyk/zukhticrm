@@ -1,5 +1,7 @@
 "use client";
 
+import { SavedCheck } from "@/components/feedback";
+
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Camera,
@@ -729,8 +731,8 @@ export function VoiceDesk({
     return (
       <div className="mx-auto max-w-lg">
         <div className="card p-6 text-center">
-          <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-olive text-white">
-            <Check />
+          <div className="mb-4 flex justify-center">
+            <SavedCheck size={52} />
           </div>
           <h1 className="h-display text-3xl">Update saved</h1>
           <p className="mt-1 text-sm text-muted">

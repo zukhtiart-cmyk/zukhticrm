@@ -28,9 +28,11 @@ export function UpdateBanner({ version }: { version: string }) {
     <button
       onClick={async () => {
         try {
-          const regs = (await navigator.serviceWorker?.getRegistrations?.()) ?? [];
+          const regs =
+            (await navigator.serviceWorker?.getRegistrations?.()) ?? [];
           await Promise.all(regs.map((r) => r.update()));
-          if (typeof caches !== "undefined") await caches.delete("zukhti-desk-v1");
+          if (typeof caches !== "undefined")
+            await caches.delete("zukhti-desk-v1");
         } catch {}
         location.reload();
       }}

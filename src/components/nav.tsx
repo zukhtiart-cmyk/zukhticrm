@@ -2,20 +2,73 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BookOpen, ClipboardCheck, FolderKanban, HandCoins, HardHat, Home, LogOut, MessageCircle, Mic, Package, Receipt, Settings, Users } from "lucide-react";
+import {
+  BarChart3,
+  BookOpen,
+  ClipboardCheck,
+  FolderKanban,
+  HandCoins,
+  HardHat,
+  Home,
+  LogOut,
+  MessageCircle,
+  Mic,
+  Package,
+  Receipt,
+  Settings,
+  Users,
+} from "lucide-react";
 
-const ICONS = { home: Home, dashboard: BarChart3, leads: Users, projects: FolderKanban, inbox: MessageCircle, procurement: Package, expenses: Receipt, contractors: HardHat, payouts: HandCoins, snags: ClipboardCheck, voice: Mic, rates: BookOpen, admin: Settings };
+const ICONS = {
+  home: Home,
+  dashboard: BarChart3,
+  leads: Users,
+  projects: FolderKanban,
+  inbox: MessageCircle,
+  procurement: Package,
+  expenses: Receipt,
+  contractors: HardHat,
+  payouts: HandCoins,
+  snags: ClipboardCheck,
+  voice: Mic,
+  rates: BookOpen,
+  admin: Settings,
+};
 /** Shown in the phone bottom bar; the rest are in the desktop sidebar only. */
-const MOBILE: (keyof typeof ICONS)[] = ["home", "leads", "projects", "inbox", "voice"];
-export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
+const MOBILE: (keyof typeof ICONS)[] = [
+  "home",
+  "leads",
+  "projects",
+  "inbox",
+  "voice",
+];
+export type NavItem = {
+  href: string;
+  label: string;
+  icon: keyof typeof ICONS;
+  badge?: number;
+};
 
-export function Sidebar({ items, userName, roleLabel, office, logout }: { items: NavItem[]; userName: string; roleLabel: string; office: string; logout: () => Promise<void> }) {
+export function Sidebar({
+  items,
+  userName,
+  roleLabel,
+  office,
+  logout,
+}: {
+  items: NavItem[];
+  userName: string;
+  roleLabel: string;
+  office: string;
+  logout: () => Promise<void>;
+}) {
   const path = usePathname();
-  const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
+  const active = (href: string) =>
+    href === "/" ? path === "/" : path.startsWith(href);
   return (
     <>
       {/* Desktop */}
-      <aside className="no-print fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-line bg-paper px-4 py-6 lg:flex">
+      <aside className="no-print fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-line bg-paper/80 px-4 py-6 backdrop-blur lg:flex">
         <Link href="/" className="h-display mb-8 px-2 text-2xl">
           Zukhti Home
         </Link>
@@ -26,11 +79,24 @@ export function Sidebar({ items, userName, roleLabel, office, logout }: { items:
               <Link
                 key={it.href}
                 href={it.href}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${active(it.href) ? "bg-ink text-paper" : "text-muted hover:bg-ivory hover:text-ink"}`}
+                className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ${active(it.href) ? "bg-ink text-paper shadow-[0_8px_20px_-12px_rgb(31_28_24/0.8)]" : "text-muted hover:translate-x-0.5 hover:bg-brass-soft/50 hover:text-ink"}`}
               >
-                <Icon size={18} />
+                {active(it.href) && (
+                  <span
+                    className="zk-pop absolute -left-4 top-2 bottom-2 w-1 rounded-r-full bg-brass"
+                    aria-hidden="true"
+                  />
+                )}
+                <Icon
+                  size={18}
+                  className={`transition-transform duration-200 group-hover:scale-110 ${active(it.href) ? "text-brass-soft" : ""}`}
+                />
                 {it.label}
-                {!!it.badge && <span className="ml-auto rounded-full bg-clay px-2 py-0.5 text-[11px] font-bold text-white">{it.badge}</span>}
+                {!!it.badge && (
+                  <span className="ml-auto rounded-full bg-clay px-2 py-0.5 text-[11px] font-bold text-white">
+                    {it.badge}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -61,20 +127,43 @@ export function Sidebar({ items, userName, roleLabel, office, logout }: { items:
       </header>
 
       {/* Mobile bottom nav */}
-      <nav className="no-print fixed inset-x-0 bottom-0 z-20 grid border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden" style={{ gridTemplateColumns: `repeat(${items.filter((i) => MOBILE.includes(i.icon)).length}, minmax(0, 1fr))` }}>
-        {items.filter((i) => MOBILE.includes(i.icon)).map((it) => {
-          const Icon = ICONS[it.icon];
-          const isVoice = it.icon === "voice";
-          return (
-            <Link key={it.href} href={it.href} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold ${active(it.href) ? "text-ink" : "text-muted"}`}>
-              <span className={`relative ${isVoice ? "grid h-9 w-9 place-items-center rounded-full bg-brass text-white" : ""}`}>
-                <Icon size={isVoice ? 18 : 20} />
-                {!!it.badge && <span className="absolute -right-2 -top-1 rounded-full bg-clay px-1.5 text-[10px] font-bold text-white">{it.badge}</span>}
-              </span>
-              {it.label}
-            </Link>
-          );
-        })}
+      <nav
+        className="no-print fixed inset-x-0 bottom-0 z-20 grid border-t border-line bg-paper/90 backdrop-blur-md pb-[env(safe-area-inset-bottom)] lg:hidden"
+        style={{
+          gridTemplateColumns: `repeat(${items.filter((i) => MOBILE.includes(i.icon)).length}, minmax(0, 1fr))`,
+        }}
+      >
+        {items
+          .filter((i) => MOBILE.includes(i.icon))
+          .map((it) => {
+            const Icon = ICONS[it.icon];
+            const isVoice = it.icon === "voice";
+            return (
+              <Link
+                key={it.href}
+                href={it.href}
+                className={`relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-semibold transition-colors active:scale-95 ${active(it.href) ? "text-ink" : "text-muted"}`}
+              >
+                {active(it.href) && !isVoice && (
+                  <span
+                    className="zk-pop absolute top-0 h-[3px] w-8 rounded-b-full bg-brass"
+                    aria-hidden="true"
+                  />
+                )}
+                <span
+                  className={`relative transition-transform duration-300 ${active(it.href) && !isVoice ? "-translate-y-0.5 scale-110" : ""} ${isVoice ? "grid h-9 w-9 place-items-center rounded-full bg-gradient-to-b from-[#b0844f] to-brass text-white shadow-[0_6px_14px_-6px_rgb(154_113_64/0.9)]" : ""}`}
+                >
+                  <Icon size={isVoice ? 18 : 20} />
+                  {!!it.badge && (
+                    <span className="absolute -right-2 -top-1 rounded-full bg-clay px-1.5 text-[10px] font-bold text-white">
+                      {it.badge}
+                    </span>
+                  )}
+                </span>
+                {it.label}
+              </Link>
+            );
+          })}
       </nav>
     </>
   );

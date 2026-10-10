@@ -6,20 +6,60 @@ import { deskLogout } from "@/app/login/actions";
 import { AssistantFab } from "@/components/assistant/assistant-fab";
 
 /** Shared header for the Voice Desk app; `wide` for table screens like procurement. */
-export function DeskShell({ user, wide, active, children }: { user: CurrentUser; wide?: boolean; active: "updates" | "procurement" | "expenses" | "contractors" | "snags" | "payments"; children: React.ReactNode }) {
+export function DeskShell({
+  user,
+  wide,
+  active,
+  children,
+}: {
+  user: CurrentUser;
+  wide?: boolean;
+  active:
+    | "updates"
+    | "procurement"
+    | "expenses"
+    | "contractors"
+    | "snags"
+    | "payments";
+  children: React.ReactNode;
+}) {
   const width = wide ? "max-w-5xl" : "max-w-lg";
   const tabs = [
     { href: "/desk", label: "Updates", key: "updates" },
-    ...(can(user.role, "expenses") ? [{ href: "/desk/expenses", label: "Expenses", key: "expenses" }] : []),
-    ...(can(user.role, "contractors") ? [{ href: "/desk/contractors", label: "Contractors", key: "contractors" }] : []),
-    ...(can(user.role, "payouts") ? [{ href: "/desk/payments", label: "Payments", key: "payments" }] : []),
-    ...(can(user.role, "snags") ? [{ href: "/desk/snags", label: "Snags", key: "snags" }] : []),
-    ...(can(user.role, "orders") ? [{ href: "/desk/procurement", label: "Procurement", key: "procurement" }] : []),
+    ...(can(user.role, "expenses")
+      ? [{ href: "/desk/expenses", label: "Expenses", key: "expenses" }]
+      : []),
+    ...(can(user.role, "contractors")
+      ? [
+          {
+            href: "/desk/contractors",
+            label: "Contractors",
+            key: "contractors",
+          },
+        ]
+      : []),
+    ...(can(user.role, "payouts")
+      ? [{ href: "/desk/payments", label: "Payments", key: "payments" }]
+      : []),
+    ...(can(user.role, "snags")
+      ? [{ href: "/desk/snags", label: "Snags", key: "snags" }]
+      : []),
+    ...(can(user.role, "orders")
+      ? [
+          {
+            href: "/desk/procurement",
+            label: "Procurement",
+            key: "procurement",
+          },
+        ]
+      : []),
   ];
   return (
     <div className="min-h-screen">
       <header className="no-print sticky top-0 z-20 border-b border-line bg-paper/95 backdrop-blur">
-        <div className={`mx-auto flex ${width} items-center justify-between gap-3 px-4 py-3`}>
+        <div
+          className={`mx-auto flex ${width} items-center justify-between gap-3 px-4 py-3`}
+        >
           <div className="min-w-0">
             <p className="h-display text-xl leading-tight">Voice Desk</p>
             <p className="truncate text-xs text-muted">
@@ -34,7 +74,10 @@ export function DeskShell({ user, wide, active, children }: { user: CurrentUser;
               </Link>
             )}
             <form action={deskLogout}>
-              <button aria-label="Sign out" className="rounded-lg p-2 text-muted hover:text-ink">
+              <button
+                aria-label="Sign out"
+                className="rounded-lg p-2 text-muted hover:text-ink"
+              >
                 <LogOut size={18} />
               </button>
             </form>
@@ -43,14 +86,28 @@ export function DeskShell({ user, wide, active, children }: { user: CurrentUser;
         {tabs.length > 1 && (
           <nav className={`mx-auto flex ${width} gap-1 overflow-x-auto px-4`}>
             {tabs.map((t) => (
-              <Link key={t.key} href={t.href} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold ${active === t.key ? "border-ink text-ink" : "border-transparent text-muted"}`}>
+              <Link
+                key={t.key}
+                href={t.href}
+                className={`relative whitespace-nowrap px-3 py-2 text-sm font-semibold transition-colors ${active === t.key ? "text-ink" : "text-muted hover:text-ink"}`}
+              >
                 {t.label}
+                {active === t.key && (
+                  <span
+                    className="zk-pop absolute inset-x-2 bottom-0 h-[3px] rounded-t-full bg-brass"
+                    aria-hidden="true"
+                  />
+                )}
               </Link>
             ))}
           </nav>
         )}
       </header>
-      <main className={`mx-auto ${width} px-4 pb-28 pt-5 print:max-w-none print:p-0`}>{children}</main>
+      <main
+        className={`mx-auto ${width} px-4 pb-28 pt-5 print:max-w-none print:p-0`}
+      >
+        {children}
+      </main>
       {can(user.role, "voice") && <AssistantFab />}
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
+import { ErrorNote, Spinner, SuccessNote } from "./feedback";
 
 type State = { error?: string; ok?: string; at?: number } | undefined;
 
@@ -20,7 +21,10 @@ export function ActionForm({
   reset?: boolean;
   buttonClass?: string;
 }) {
-  const [state, run, pending] = useActionState<State, FormData>(action, undefined);
+  const [state, run, pending] = useActionState<State, FormData>(
+    action,
+    undefined,
+  );
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state?.ok && reset) ref.current?.reset();
@@ -28,11 +32,31 @@ export function ActionForm({
   return (
     <form ref={ref} action={run} className={className}>
       {children}
-      {state?.error && <p className="rounded-xl bg-clay-soft px-3 py-2 text-sm text-clay sm:col-span-full">{state.error}</p>}
-      {state?.ok && <p className="rounded-xl bg-olive-soft px-3 py-2 text-sm text-olive sm:col-span-full">{state.ok}</p>}
+      {state?.error && (
+        <ErrorNote
+          key={`e${state.at ?? state.error}`}
+          className="sm:col-span-full"
+        >
+          {state.error}
+        </ErrorNote>
+      )}
+      {state?.ok && (
+        <SuccessNote
+          key={`o${state.at ?? state.ok}`}
+          className="sm:col-span-full"
+        >
+          {state.ok}
+        </SuccessNote>
+      )}
       <div className="sm:col-span-full">
         <button className={buttonClass} disabled={pending}>
-          {pending ? "Saving…" : submitLabel}
+          {pending ? (
+            <>
+              <Spinner /> Saving…
+            </>
+          ) : (
+            submitLabel
+          )}
         </button>
       </div>
     </form>

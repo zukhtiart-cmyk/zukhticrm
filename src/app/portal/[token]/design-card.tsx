@@ -1,5 +1,7 @@
 "use client";
 
+import { Spinner } from "@/components/feedback";
+
 import { useActionState, useState } from "react";
 import { decideDesign } from "./actions";
 
@@ -45,7 +47,13 @@ export function DesignDecision({
             disabled={pending}
             className="btn-brass"
           >
-            {pending ? "Saving…" : "Approve"}
+            {pending ? (
+              <>
+                <Spinner /> Saving…
+              </>
+            ) : (
+              "Approve"
+            )}
           </button>
           <button
             type="button"

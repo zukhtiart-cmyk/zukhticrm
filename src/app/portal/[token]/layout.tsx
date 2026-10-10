@@ -13,12 +13,10 @@ export default function PortalLayout({
 }) {
   return (
     <div className="min-h-screen">
-      <header className="no-print border-b border-line bg-paper">
+      <header className="no-print border-b border-line bg-paper/80 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
           <p className="h-display text-2xl">Zukhti Home</p>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Client portal
-          </p>
+          <p className="text-sm font-medium text-muted">Client portal</p>
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 pb-16 pt-6 print:max-w-none print:p-0">

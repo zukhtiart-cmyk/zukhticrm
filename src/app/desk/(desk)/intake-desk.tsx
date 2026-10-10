@@ -1,5 +1,7 @@
 "use client";
 
+import { SavedCheck } from "@/components/feedback";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Check, Loader2, Send, Volume2, VolumeX } from "lucide-react";
@@ -387,8 +389,8 @@ export function IntakeDesk({
   if (saved) {
     return (
       <div className="card p-6 text-center">
-        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-olive text-white">
-          <Check />
+        <div className="mb-4 flex justify-center">
+          <SavedCheck size={52} />
         </div>
         <h2 className="h-display text-3xl">
           {kind === "lead" ? "Lead added" : "Contractor added"}

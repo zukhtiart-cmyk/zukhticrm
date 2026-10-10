@@ -1,5 +1,7 @@
 "use client";
 
+import { SavedCheck } from "@/components/feedback";
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -873,9 +875,9 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
 
                   {result && (
                     <p
-                      className={`mt-2 rounded-lg px-2 py-1.5 text-xs ${result.ok ? "bg-olive-soft text-olive" : "bg-clay-soft text-clay"}`}
+                      className={`mt-2 flex flex-wrap items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs ${result.ok ? "zk-pop bg-olive-soft text-olive" : "zk-shake bg-clay-soft text-clay"}`}
                     >
-                      {result.ok ? "✓ " : "✗ "}
+                      {result.ok ? <SavedCheck size={16} /> : "✗ "}
                       {result.message}{" "}
                       {result.ok && result.href && (
                         <button
@@ -899,9 +901,9 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
               .map((r) => (
                 <p
                   key={r.index}
-                  className="rounded-lg bg-olive-soft px-3 py-2 text-xs text-olive"
+                  className="zk-pop flex flex-wrap items-center gap-1.5 rounded-lg bg-olive-soft px-3 py-2 text-xs text-olive"
                 >
-                  ✓ {r.message}{" "}
+                  <SavedCheck size={16} /> {r.message}{" "}
                   {r.href && (
                     <button
                       type="button"

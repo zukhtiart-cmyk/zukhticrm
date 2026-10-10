@@ -1,12 +1,28 @@
 import Link from "next/link";
 import { titleCase } from "@/lib/format";
+import { CountUp } from "./count-up";
+import { ZukiFace } from "./zuki";
+export { ProgressBar } from "./progress-bar";
 
-export function PageHeader({ title, subtitle, actions, back }: { title: string; subtitle?: React.ReactNode; actions?: React.ReactNode; back?: { href: string; label: string } }) {
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+  back,
+}: {
+  title: string;
+  subtitle?: React.ReactNode;
+  actions?: React.ReactNode;
+  back?: { href: string; label: string };
+}) {
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
         {back && (
-          <Link href={back.href} className="mb-1 inline-block text-xs font-semibold text-muted hover:text-ink">
+          <Link
+            href={back.href}
+            className="mb-1 inline-block text-xs font-semibold text-muted hover:text-ink"
+          >
             ← {back.label}
           </Link>
         )}
@@ -60,29 +76,67 @@ const statusTone: Record<string, keyof typeof tones> = {
   REIMBURSED: "olive",
 };
 
-export function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: keyof typeof tones }) {
-  return <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}>{children}</span>;
+export function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: keyof typeof tones;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}
+    >
+      <span
+        className="h-1.5 w-1.5 rounded-full bg-current opacity-70"
+        aria-hidden="true"
+      />
+      {children}
+    </span>
+  );
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  return <Badge tone={statusTone[status] ?? "neutral"}>{titleCase(status)}</Badge>;
+  return (
+    <Badge tone={statusTone[status] ?? "neutral"}>{titleCase(status)}</Badge>
+  );
 }
 
-export function Stat({ label, value, hint }: { label: string; value: React.ReactNode; hint?: React.ReactNode }) {
+export function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
+}) {
   return (
     <div className="card p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
-      <p className="h-display mt-1 text-3xl">{value}</p>
+      <p className="text-[13px] font-semibold text-muted">{label}</p>
+      <p className="h-display mt-1 text-3xl">
+        <CountUp value={value} />
+      </p>
       {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
 
-export function Section({ title, actions, children, className = "" }: { title: string; actions?: React.ReactNode; children: React.ReactNode; className?: string }) {
+export function Section({
+  title,
+  actions,
+  children,
+  className = "",
+}: {
+  title: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <section className={`card p-4 sm:p-5 ${className}`}>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-muted">{title}</h2>
+        <h2 className="h-display text-xl leading-tight">{title}</h2>
         {actions}
       </div>
       {children}
@@ -91,13 +145,12 @@ export function Section({ title, actions, children, className = "" }: { title: s
 }
 
 export function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-muted">{children}</p>;
-}
-
-export function ProgressBar({ value }: { value: number }) {
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-line/70">
-      <div className="h-full rounded-full bg-olive transition-all" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+    <div className="flex items-center justify-center gap-3 rounded-xl border border-dashed border-line bg-ivory/40 px-4 py-6 text-sm text-muted">
+      <span className="shrink-0 opacity-70">
+        <ZukiFace size={30} />
+      </span>
+      <p>{children}</p>
     </div>
   );
 }

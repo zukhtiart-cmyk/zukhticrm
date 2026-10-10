@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 
-export function CopyButton({ text, label = "Copy link" }: { text: string; label?: string }) {
+export function CopyButton({
+  text,
+  label = "Copy link",
+}: {
+  text: string;
+  label?: string;
+}) {
   const [done, setDone] = useState(false);
   return (
     <button
