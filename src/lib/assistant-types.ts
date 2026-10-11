@@ -55,7 +55,25 @@ export type AssistantReply = {
   asking: { index: number; field: string } | null;
   heard: string;
   notice?: string;
+  /** What the speaker wants done with the cards right now: "save" them, "cancel" them, or nothing. */
+  intent?: "save" | "cancel" | null;
+  /** Everything needed is filled and Zuki has read it back — a "yes" will save it. */
+  readyToSave?: boolean;
 };
+
+/** One line of the running conversation, so Zuki understands "same for Mehta" or "change it to 6000". */
+export type HistoryTurn = { who: "me" | "zuki"; text: string };
+
+/** Short spoken confirmations, in English, Hindi and Hinglish. */
+export const YES_RE =
+  /^\s*(yes|y|yeah|yep|yup|sure|haan|haa|ha|han|hanji|haanji|ji|ok|okay|okk|save|save it|save kar|save karo|confirm|done|go ahead|theek hai|thik hai|theek|sahi hai|bilkul|kar do|kardo|👍)\b/i;
+export const NO_RE =
+  /^\s*(no|nope|nahi|nahin|na|cancel|stop|reset|clear|discard|chhodo|chodo|rehne do|rahne do|mat karo)\b/i;
+/** A reply is a plain yes/no only when it's short — "yes, and also add 2000 for Mehta" is a new instruction. */
+export const isShortYes = (t: string) =>
+  YES_RE.test(t) && t.trim().split(/\s+/).length <= 6 && !/\d/.test(t);
+export const isShortNo = (t: string) =>
+  NO_RE.test(t) && t.trim().split(/\s+/).length <= 5 && !/\d/.test(t);
 
 export type AssistantContext = {
   projects: { id: string; name: string; client: string; currency: string }[];

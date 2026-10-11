@@ -56,6 +56,21 @@ One sentence can hold several items (with AI on). Nothing is saved until you tap
 
 Photo reading needs the Anthropic key.
 
+**Talking with Zuki.** Zuki opens with a greeting by name and the two or three things that need you today (sites with no update, approvals waiting, leads to follow up, open snags — only what your role sees). Then it's a conversation:
+
+- It asks for anything missing, then reads the item back — “₹5,000 by cash to Ramesh Carpentry Works for Shah residence. Shall I save it?” — and **“haan, save kar do” / “yes” saves it**, “no / rehne do” cancels. Nothing is saved without that yes (or a tap on Confirm).
+- It remembers the last few lines, so “same for Mehta” or “change it to 6,000” work.
+- **Conversation mode** (the speech-bubble button in Zuki's header): after Zuki asks something it listens again by itself and closes the mic when you pause. On iPhone the browser doesn't allow that, so tap Zuki to answer.
+- Tap Zuki while it's talking to interrupt it.
+- Zuki smiles after a save and looks worried when something goes wrong.
+
+**Natural voice (optional).** By default Zuki uses the phone's best built-in voice. For a much more human voice, add one of these in Vercel → Settings → Environment Variables and redeploy:
+
+- `ELEVENLABS_API_KEY` (from elevenlabs.io), and optionally `ELEVENLABS_VOICE_ID` to pick a voice from their Voice Library (an Indian-English voice works well for Hinglish) and `ELEVENLABS_MODEL` (default `eleven_multilingual_v2`).
+- or `ZUKI_VOICE=openai` with an `OPENAI_API_KEY` that has credit (optional `ZUKI_OPENAI_VOICE`, default `coral`).
+
+If the voice service fails, Zuki falls back to the phone's voice automatically.
+
 **Zuki on WhatsApp (staff).** Anyone whose WhatsApp number is saved on the Team page can message the business WhatsApp number and talk to Zuki the same way — text, photos, and voice notes (voice notes need `OPENAI_API_KEY` with credit; otherwise type, or use the phone keyboard's mic). Zuki replies with what it understood; reply **YES** to save or **NO** to cancel. Project updates saved from WhatsApp are internal — send the client message from the desk. New leads, contractors and measurement sheets get a link to finish in the app.
 
 ### Voice Desk (`/desk`)

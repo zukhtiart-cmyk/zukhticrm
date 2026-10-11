@@ -13,6 +13,7 @@ import {
   type AssistantContext,
   type Missing,
 } from "./assistant-types";
+import type { HistoryTurn } from "./assistant-types";
 import type { Role } from "@/db/schema";
 
 type U = { id: string; name: string; role: Role; officeId: string | null };
@@ -103,7 +104,7 @@ const PLAN_TOOL = {
       reply: {
         type: "string",
         description:
-          "One short, friendly sentence confirming what you understood (same language style as the speaker).",
+          'Your spoken reaction, like a warm colleague. If you made or changed actions: 2–6 words only ("Got it.", "Sure, Ramesh ji.", "Achha, noted.") — never repeat amounts or details and never ask for missing details; the app reads them back and asks. If they\'re just chatting (hello, thanks, how are you) or you can\'t do it: one or two natural sentences. Match their language (English / Hindi / Hinglish in Latin script).',
       },
       actions: {
         type: "array",
@@ -190,7 +191,7 @@ const PLAN_TOOL = {
 };
 
 function system(ctx: AssistantContext, user: U, today: string) {
-  return `You are Zuki, the voice assistant inside Zukhti Home's CRM (turnkey interior design, Mumbai / Dubai). ${user.name} (${user.role}) speaks English, Hindi or Hinglish.
+  return `You are Zuki, the voice assistant inside Zukhti Home's CRM (turnkey interior design, Mumbai / Dubai). You're talking with ${user.name} (${user.role}), who speaks English, Hindi or Hinglish. You sound like a friendly, sharp colleague on the team — warm, brief, never robotic or formal. Use their first name now and then, not every time.
 Decide what each thing they said is, and output CRM actions. Today is ${today}.
 Action types (only these are allowed for this person: ${ctx.allowed.join(", ")}):
 - payment: money WE paid TO a contractor, labourer or helper (advance, wages, against work). Needs contractor, project, amount, mode.
@@ -209,6 +210,8 @@ Rules:
 - Use ONLY ids from the lists below. Match names loosely (first name, surname, firm name, client name, area). If unsure, leave the id empty — never guess between two similar names.
 - Never invent amounts, modes or projects that weren't said. "cash/nakad" = Cash; "GPay/PhonePe/Paytm/UPI" = UPI; "NEFT/IMPS/RTGS/bank" = Bank transfer.
 - If something is outside the allowed types, don't create it; say so in reply.
+- "Same for <project>" / "aur Mehta ke liye bhi" means: add another action like the last one, for that project.
+- Plain chat (greetings, thanks, "how are you") gets a short friendly reply and no new actions — keep the CURRENT actions unchanged.
 Projects (id | name | client):
 ${ctx.projects.map((p) => `${p.id} | ${p.name} | ${p.client}`).join("\n") || "(none)"}
 Contractors (id | name | trade):
@@ -264,8 +267,16 @@ export async function aiPlan(
   ctx: AssistantContext,
   user: U,
   today: string,
+  history: HistoryTurn[] = [],
 ) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const convo = history
+    .slice(-8)
+    .map(
+      (h) =>
+        `${h.who === "me" ? user.name.split(" ")[0] : "Zuki"}: ${h.text.slice(0, 400)}`,
+    )
+    .join("\n");
   const out = await callTool<{ reply?: string; actions?: RawAction[] }>(
     client,
     {
@@ -276,7 +287,7 @@ export async function aiPlan(
       messages: [
         {
           role: "user",
-          content: `CURRENT actions: ${JSON.stringify(current.map(toRaw))}\n${asking ? `You had asked about action #${asking.index + 1}, field "${asking.field}".\n` : ""}\nThey said:\n"""${text}"""`,
+          content: `${convo ? `Conversation so far (use it for "same for…", "change it to…", "that one", "usko"):\n${convo}\n\n` : ""}CURRENT actions: ${JSON.stringify(current.map(toRaw))}\n${asking ? `You had asked about action #${asking.index + 1}, field "${asking.field}".\n` : ""}\nThey said:\n"""${text}"""`,
         },
       ],
     },

@@ -7,6 +7,8 @@ import {
   ACTION_LABEL,
   handoffHref,
   type AssistantAction,
+  YES_RE as YES,
+  NO_RE as NO,
 } from "./assistant-types";
 import { buildVoiceContext } from "./voice-context";
 import { basicUnderstand, transcribe, understand } from "./voice-ai";
@@ -30,10 +32,6 @@ type State = {
 };
 const EMPTY: State = { actions: [], asking: null, photos: {}, proposals: {} };
 const EXPIRE_MS = 3 * 3600 * 1000;
-const YES =
-  /^(yes|y|yeah|yep|haan|ha|han|haa|ok|okay|save|confirm|done|theek hai|thik hai|sahi hai|👍)\b/i;
-const NO =
-  /^(no|nahi|nahin|cancel|stop|reset|clear|discard|chhodo|rehne do)\b/i;
 
 /** The active staff member who owns this WhatsApp number, if any. */
 export async function staffForPhone(from: string) {
@@ -308,6 +306,7 @@ export async function handleStaffMessage(
     asking: state.asking,
     photos: photoIdx,
     photo,
+    channel: "whatsapp",
   });
   const next: State = {
     actions: turn.actions,

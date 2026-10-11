@@ -47,7 +47,8 @@ export function ZukiFace({ size = 40 }: { size?: number }) {
   );
 }
 
-export type ZukiState = "idle" | "speaking" | "listening" | "thinking";
+export type ZukiState =
+  "idle" | "speaking" | "listening" | "thinking" | "happy" | "concerned";
 
 export function Zuki({
   state,
@@ -199,6 +200,35 @@ export function Zuki({
                 />
               </g>
             </g>
+            {/* Happy: eyes close into little arcs */}
+            <g
+              className="zk-happy-eyes"
+              fill="none"
+              stroke="var(--color-ink)"
+              strokeWidth="4.5"
+              strokeLinecap="round"
+            >
+              <path d="M74 114 q8 -10 16 0" />
+              <path d="M110 114 q8 -10 16 0" />
+            </g>
+            {/* Concerned: worried brows */}
+            <g
+              className="zk-brows"
+              stroke="var(--color-ink)"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+            >
+              <path d="M74 96 l14 -5" />
+              <path d="M126 96 l-14 -5" />
+            </g>
+            <path
+              className="zk-frown"
+              d="M90 141 q10 -6 20 0"
+              fill="none"
+              stroke="var(--color-ink)"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
             {/* Mouth: a smile when idle, opens when speaking, small "o" when listening */}
             <path
               className="zk-smile"
@@ -277,6 +307,21 @@ const CSS = `
 .zk-listening .zk-lamp { fill: var(--color-clay); animation: zk-glow 1s ease-in-out infinite; }
 .zk-listening .zk-body { animation: zk-lean 1.6s ease-in-out infinite alternate; }
 
+/* Happy and concerned */
+.zk-happy-eyes, .zk-brows, .zk-frown { opacity: 0; transition: opacity .2s; }
+.zk-happy .zk-eye { opacity: 0; }
+.zk-happy .zk-happy-eyes { opacity: 1; }
+.zk-happy .zk-smile { transform-box: fill-box; transform-origin: center; transform: scale(1.35, 1.6); }
+.zk-happy .zk-body { animation: zk-hop .5s cubic-bezier(.3,1.6,.5,1) 2; }
+.zk-happy .zk-arm-l { transform-origin: 48px 128px; animation: zk-cheer .5s ease-in-out 2 alternate; }
+.zk-happy .zk-arm-r { transform-origin: 152px 128px; animation: zk-cheer-r .5s ease-in-out 2 alternate; }
+.zk-happy .zk-lamp { fill: #e8c46a; }
+.zk-concerned .zk-brows, .zk-concerned .zk-frown { opacity: 1; }
+.zk-concerned .zk-smile { opacity: 0; }
+.zk-concerned .zk-eye { animation: none; transform: scale(.9); }
+.zk-concerned .zk-body { animation: zk-tilt 1.8s ease-in-out infinite alternate; }
+.zk-concerned .zk-lamp { fill: var(--color-clay); }
+
 /* Thinking */
 .zk-thinking .zk-eyes { transform: translate(5px, -6px); }
 .zk-thinking .zk-eye { animation: none; }
@@ -287,6 +332,10 @@ const CSS = `
 .zk-heard { animation: zk-pop .2s ease-out; }
 .zk-dot { width: 8px; height: 8px; border-radius: 9999px; background: var(--color-muted); animation: zk-dots .9s ease-in-out infinite; }
 
+@keyframes zk-hop { 0%,100% { transform: translateY(0) } 40% { transform: translateY(-12px) } }
+@keyframes zk-cheer { to { transform: rotate(40deg) } }
+@keyframes zk-cheer-r { to { transform: rotate(-40deg) } }
+@keyframes zk-tilt { from { transform: rotate(-4deg) } to { transform: rotate(2deg) } }
 @keyframes zk-shadow { 0%,100% { transform: scaleX(1); opacity: .12 } 50% { transform: scaleX(.85); opacity: .08 } }
 @keyframes zk-float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
 @keyframes zk-bob { from { transform: translateY(0) rotate(-1.5deg) } to { transform: translateY(-3px) rotate(1.5deg) } }

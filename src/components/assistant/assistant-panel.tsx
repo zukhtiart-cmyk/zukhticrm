@@ -8,6 +8,7 @@ import {
   Camera,
   Check,
   Loader2,
+  MessagesSquare,
   Send,
   Trash2,
   Volume2,
@@ -18,6 +19,7 @@ import { Zuki, ZukiFace, type ZukiState } from "@/components/zuki";
 import {
   primeSpeech,
   setAudioMode,
+  setCloudVoice,
   speak,
   stopSpeaking,
 } from "@/lib/speech-client";
@@ -30,6 +32,7 @@ import {
   type AssistantAction,
   type AssistantContext,
   type AssistantReply,
+  type HistoryTurn,
   type Missing,
 } from "@/lib/assistant-types";
 
@@ -131,7 +134,21 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   const [actions, setActions] = useState<AssistantAction[]>([]);
   const [photos, setPhotos] = useState<Record<number, File | undefined>>({});
   const [asking, setAsking] = useState<AssistantReply["asking"]>(null);
-  const [bubble, setBubble] = useState(GREETING);
+  const [bubble, setBubble] = useState("");
+  const [greeted, setGreeted] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [mood, setMood] = useState<"happy" | "concerned" | null>(null);
+  const [talkMode, setTalkMode] = useState(true);
+  const [autoListening, setAutoListening] = useState(false);
+  const history = useRef<HistoryTurn[]>([]);
+  const latest = useRef<{
+    send: (text: string, photo?: File) => Promise<void>;
+    save: (list?: AssistantAction[]) => Promise<void>;
+    listen: (auto?: boolean) => void;
+  }>({ send: async () => {}, save: async () => {}, listen: () => {} });
+  const talkRef = useRef(true);
+  const voiceRef = useRef(true);
+  const moodTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [heard, setHeard] = useState("");
   const [interim, setInterim] = useState("");
   const [typed, setTyped] = useState("");
@@ -148,25 +165,81 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   const rec = useRef<SpeechRec | null>(null);
   const heardRef = useRef("");
   const interimRef = useRef("");
-  const stateRef = useRef({ actions, asking, photos });
-  stateRef.current = { actions, asking, photos };
+  const stateRef = useRef({ actions, asking, photos, busy: false });
+  stateRef.current = { actions, asking, photos, busy: busy || saving };
+
+  talkRef.current = talkMode;
+  voiceRef.current = voiceOn;
 
   useEffect(() => {
+    try {
+      if (localStorage.getItem("zuki-talk") === "off") setTalkMode(false);
+    } catch {}
     fetch("/api/assistant/understand")
       .then((r) => r.json())
       .then((c) => !c.error && setCtx(c))
       .catch(() => {});
-    return () => stopSpeaking();
+    // Zuki opens the conversation: hello by name, and what needs attention today.
+    fetch("/api/assistant/greeting")
+      .then((r) => r.json())
+      .then(
+        (g: { text?: string; cloudVoice?: boolean; firstName?: string }) => {
+          setCloudVoice(!!g.cloudVoice);
+          if (g.firstName) setFirstName(g.firstName);
+          const text = g.text || GREETING;
+          setBubble(text);
+          setGreeted(true);
+          history.current.push({ who: "zuki", text });
+          say(text, true);
+        },
+      )
+      .catch(() => {
+        setBubble(GREETING);
+        setGreeted(true);
+      });
+    return () => {
+      stopSpeaking();
+      try {
+        rec.current?.abort?.();
+      } catch {}
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function say(text: string) {
-    if (!voiceOn) return;
+  function feel(m: "happy" | "concerned" | null, ms = 2600) {
+    if (moodTimer.current) clearTimeout(moodTimer.current);
+    setMood(m);
+    if (m && ms) moodTimer.current = setTimeout(() => setMood(null), ms);
+  }
+
+  /** Conversation mode keeps listening after Zuki asks something — where the browser allows it (not iPhone). */
+  const canAutoListen = () => !isIOS() && !!getRec();
+
+  function say(text: string, listenAfter = false) {
+    const after = () => {
+      if (listenAfter && talkRef.current && canAutoListen())
+        setTimeout(() => latest.current.listen(true), 300);
+    };
+    if (!voiceRef.current) {
+      after();
+      return;
+    }
     setSpeaking(true);
     speak(text, {
       start: () => setSpeaking(true),
-      end: () => setSpeaking(false),
+      end: () => {
+        setSpeaking(false);
+        after();
+      },
     });
   }
+
+  const remember = (who: HistoryTurn["who"], text: string) => {
+    if (!text.trim()) return;
+    history.current = [...history.current, { who, text: text.trim() }].slice(
+      -10,
+    );
+  };
 
   async function send(text: string, photo?: File) {
     if (!text.trim() && !photo) return;
@@ -174,13 +247,17 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     setError(null);
     setResults(null);
     setHeard(photo ? `📷 ${text.trim() || "Reading the photo…"}` : text.trim());
+    if (mood === "concerned") feel(null);
     const s = stateRef.current;
+    const past = history.current.slice(-8);
+    remember("me", photo ? `(sent a photo) ${text}` : text);
     try {
       const body = new FormData();
       body.set("text", text.trim());
       if (photo) body.set("photo", photo);
       body.set("actions", JSON.stringify(s.actions));
       body.set("asking", JSON.stringify(s.asking));
+      body.set("history", JSON.stringify(past));
       body.set(
         "photos",
         Object.keys(s.photos)
@@ -226,25 +303,40 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
       setActions(json.actions);
       setAsking(json.asking);
       setNotice(json.notice ?? null);
+      if (json.intent === "save") {
+        // "Haan, save kar do" — same as tapping Confirm.
+        setBusy(false);
+        await latest.current.save(json.actions);
+        return;
+      }
+      if (json.intent === "cancel") {
+        setPhotos({});
+        setResults(null);
+      }
       setBubble(json.reply);
-      say(json.reply);
+      remember("zuki", json.reply);
+      say(json.reply, json.reply.trim().endsWith("?"));
     } catch (e) {
       setError((e as Error).message);
+      feel("concerned", 0);
       if (text.trim()) setTyped(text.trim());
     } finally {
       setBusy(false);
     }
   }
 
-  function listen() {
+  function listen(auto = false) {
     const Rec = getRec();
+    if (auto && (rec.current || stateRef.current.busy)) return;
     if (!Rec) {
+      if (auto) return;
       setError(
         "Voice isn't available in this browser — type below, or use the 🎤 on your keyboard.",
       );
       return;
     }
     stopSpeaking();
+    setSpeaking(false);
     try {
       rec.current?.abort?.();
     } catch {}
@@ -254,7 +346,14 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     setTimeout(() => {
       const r = new Rec();
       r.lang = "en-IN";
-      r.continuous = !isIOS();
+      // In conversation mode the mic closes by itself when you pause, like a person waiting for you to finish.
+      r.continuous = !isIOS() && !auto;
+      let silence: ReturnType<typeof setTimeout> | null = auto
+        ? setTimeout(
+            () => !heardRef.current && !interimRef.current && r.stop(),
+            8000,
+          )
+        : null;
       r.interimResults = true;
       r.onresult = (e) => {
         let fin = "";
@@ -266,32 +365,41 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
         if (fin) heardRef.current = `${heardRef.current} ${fin}`.trim();
         interimRef.current = mid;
         setInterim(mid);
+        if (silence) {
+          clearTimeout(silence);
+          silence = null;
+        }
       };
       r.onerror = (e) => {
         if (e.error === "not-allowed" || e.error === "service-not-allowed")
           setError(
             "Microphone is blocked. On iPhone: tap “aA” in the address bar → Website Settings → Microphone → Allow. Or type below.",
           );
-        else if (e.error === "no-speech")
+        else if (e.error === "no-speech" && !auto)
           setError("Didn't hear anything — tap Zuki and speak.");
       };
       r.onend = () => {
+        if (silence) clearTimeout(silence);
         setListening(false);
+        setAutoListening(false);
         const text =
           `${heardRef.current} ${heardRef.current ? "" : interimRef.current}`.trim();
         setInterim("");
         rec.current = null;
-        if (text) send(text);
+        if (text) latest.current.send(text);
       };
       rec.current = r;
       try {
         setAudioMode("play-and-record");
         r.start();
         setListening(true);
+        setAutoListening(auto);
       } catch {
-        setError(
-          "Couldn't start the microphone — tap Zuki again, or type below.",
-        );
+        rec.current = null;
+        if (!auto)
+          setError(
+            "Couldn't start the microphone — tap Zuki again, or type below.",
+          );
       }
     }, 200);
   }
@@ -299,6 +407,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   function tapZuki() {
     primeSpeech();
     if (listening) return rec.current?.stop();
+    // Tapping while Zuki talks interrupts it, like cutting in on a call.
     listen();
   }
 
@@ -327,14 +436,14 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     .map((a, i) => ({ a, i }))
     .filter((x) => HANDOFF.includes(x.a.type));
 
-  async function save() {
+  async function save(list: AssistantAction[] = actions) {
     primeSpeech();
     setSaving(true);
     setError(null);
     try {
       const body = new FormData();
-      body.set("actions", JSON.stringify(actions));
-      Object.entries(photos).forEach(
+      body.set("actions", JSON.stringify(list));
+      Object.entries(stateRef.current.photos).forEach(
         ([k, f]) => f && body.set(`photo_${k}`, f),
       );
       const res = await fetch("/api/assistant/execute", {
@@ -348,13 +457,14 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
       setResults(json.results);
       const ok = (json.results as { ok: boolean }[]).filter((r) => r.ok).length;
       const failed = json.results.length - ok;
+      const hand = list.some((a) => HANDOFF.includes(a.type));
       const msg = failed
-        ? `Saved ${ok}, but ${failed} couldn't be saved — see below.`
-        : `Done! ${ok === 1 ? "It's" : `All ${ok} are`} saved in the right place.`;
-      setBubble(
-        handoffs.length ? `${msg} Tap “Open” to finish the rest.` : msg,
-      );
-      say(msg);
+        ? `I saved ${ok}, but ${failed} couldn't be saved — have a look below.`
+        : `Done${firstName ? `, ${firstName}` : ""} — ${ok === 1 ? "saved" : `all ${ok} saved`}.${hand ? " Tap Open to finish the rest." : " Anything else?"}`;
+      setBubble(msg);
+      remember("zuki", msg);
+      feel(failed ? "concerned" : "happy", failed ? 0 : 2600);
+      say(msg, !failed && !hand);
       if (!failed) {
         // Keep only hand-offs (if any) so they can still be opened.
         setActions((all) => all.filter((a) => HANDOFF.includes(a.type)));
@@ -364,6 +474,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
+      feel("concerned", 0);
     } finally {
       setSaving(false);
     }
@@ -378,17 +489,24 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     setError(null);
     setNotice(null);
     setHeard("");
-    setBubble(GREETING);
+    feel(null);
+    history.current = [];
+    setBubble("Okay, fresh start. What's happening?");
   }
 
+  // The hands-free loop runs from callbacks (speech ended, mic closed); they always call the newest version.
+  latest.current = { send, save, listen };
+
   const state: ZukiState =
-    busy || saving
+    busy || saving || !greeted
       ? "thinking"
       : listening
         ? "listening"
-        : speaking
-          ? "speaking"
-          : "idle";
+        : mood === "happy"
+          ? "happy"
+          : speaking
+            ? "speaking"
+            : (mood ?? "idle");
   const projectName = (id?: string | null) =>
     ctx?.projects.find((p) => p.id === id)?.name;
 
@@ -409,13 +527,45 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             <div>
               <p className="font-semibold leading-tight">Zuki</p>
               <p className="text-[11px] text-muted">
-                Say it once — I&apos;ll file it in the right place
+                Talk to me like a colleague — I&apos;ll file it
               </p>
             </div>
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setVoiceOn((v) => !v)}
+              onClick={() =>
+                setTalkMode((t) => {
+                  try {
+                    localStorage.setItem("zuki-talk", t ? "off" : "on");
+                  } catch {}
+                  return !t;
+                })
+              }
+              className={`rounded-lg p-2 ${talkMode ? "text-brass" : "text-muted"}`}
+              aria-label={
+                talkMode
+                  ? "Conversation mode on — tap to turn off"
+                  : "Conversation mode off — tap to turn on"
+              }
+              aria-pressed={talkMode}
+              title={
+                talkMode
+                  ? "Conversation mode: Zuki keeps listening after it asks something"
+                  : "Conversation mode is off"
+              }
+            >
+              <MessagesSquare size={18} />
+            </button>
+            <button
+              onClick={() =>
+                setVoiceOn((v) => {
+                  if (v) {
+                    stopSpeaking();
+                    setSpeaking(false);
+                  }
+                  return !v;
+                })
+              }
               className="rounded-lg p-2 text-muted"
               aria-label={voiceOn ? "Mute Zuki" : "Unmute Zuki"}
             >
@@ -449,8 +599,14 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
                 : saving
                   ? "Saving…"
                   : listening
-                    ? "Tap Zuki when you're done"
-                    : "Tap Zuki and speak"
+                    ? autoListening
+                      ? "I'm listening — just talk"
+                      : "Tap Zuki when you're done"
+                    : speaking
+                      ? "Tap Zuki to interrupt"
+                      : bubble.trim().endsWith("?")
+                        ? "Tap Zuki to answer"
+                        : "Tap Zuki and speak"
             }
             onTap={tapZuki}
             disabled={busy || saving}
@@ -924,7 +1080,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
         <div className="border-t border-line bg-paper px-4 py-3">
           {savable.length > 0 && (
             <button
-              onClick={save}
+              onClick={() => save()}
               disabled={saving || busy || blocking.length > 0}
               className="btn-primary mb-2 w-full py-3 text-base"
             >
@@ -974,6 +1130,14 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             <input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
+              onFocus={() => {
+                // Typing instead: close a mic that conversation mode opened.
+                if (autoListening) {
+                  heardRef.current = "";
+                  interimRef.current = "";
+                  rec.current?.abort?.();
+                }
+              }}
               placeholder="…or type it here"
               className="input"
               disabled={busy}

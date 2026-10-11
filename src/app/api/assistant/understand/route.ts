@@ -5,7 +5,11 @@ import { getSession } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { assistantContext } from "@/lib/assistant";
 import { planTurn } from "@/lib/assistant-core";
-import type { AssistantAction, AssistantReply } from "@/lib/assistant-types";
+import type {
+  AssistantAction,
+  AssistantReply,
+  HistoryTurn,
+} from "@/lib/assistant-types";
 import { transcribe } from "@/lib/voice-ai";
 
 export const maxDuration = 60;
@@ -86,8 +90,23 @@ export async function POST(req: Request) {
       { status: 400 },
     );
 
+  let history: HistoryTurn[] = [];
+  try {
+    const h = JSON.parse(String(form.get("history") ?? "[]"));
+    if (Array.isArray(h))
+      history = h
+        .filter(
+          (x) =>
+            x &&
+            (x.who === "me" || x.who === "zuki") &&
+            typeof x.text === "string",
+        )
+        .slice(-8)
+        .map((x) => ({ who: x.who, text: String(x.text).slice(0, 500) }));
+  } catch {}
+
   return NextResponse.json(
-    await planTurn(user, { text, actions, asking, photos, photo }),
+    await planTurn(user, { text, actions, asking, photos, photo, history }),
   );
 }
 
