@@ -14,6 +14,51 @@ let primed = false;
 let cloudVoice = false;
 let player: HTMLAudioElement | null = null;
 let currentUrl: string | null = null;
+/** How open Zuki's mouth should be right now (0–1), for the 3D character's lip movement. */
+let talking = false;
+let wordPulse = 0;
+let analyser: AnalyserNode | null = null;
+let analyserData: Uint8Array<ArrayBuffer> | null = null;
+let audioCtx: AudioContext | null = null;
+let wired = false;
+
+export function mouthLevel(now = performance.now()) {
+  if (!talking) return 0;
+  if (analyser && analyserData && player && !player.paused) {
+    analyser.getByteTimeDomainData(analyserData);
+    let sum = 0;
+    for (const v of analyserData) sum += (v - 128) * (v - 128);
+    return Math.min(1, Math.sqrt(sum / analyserData.length) / 28);
+  }
+  // The phone voice gives no sound level: a syllable-like rhythm, kicked up at each word.
+  const t = now / 1000;
+  wordPulse *= 0.9;
+  const syllables = 0.5 + 0.5 * Math.sin(t * 17) * Math.sin(t * 5.3 + 1);
+  return Math.min(1, 0.15 + syllables * 0.6 + wordPulse * 0.4);
+}
+
+/** Lets the 3D mouth follow the real voice (not on iPhone, where it could move sound to the earpiece). */
+function wireAnalyser() {
+  if (wired || !player || /iPad|iPhone|iPod/.test(navigator.userAgent)) return;
+  wired = true;
+  try {
+    const AC =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AC) return;
+    audioCtx = new AC();
+    const src = audioCtx.createMediaElementSource(player);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    analyserData = new Uint8Array(new ArrayBuffer(analyser.fftSize));
+    src.connect(analyser);
+    analyser.connect(audioCtx.destination);
+  } catch {
+    analyser = null;
+  }
+}
+
 /** Each speak() gets a number; stopSpeaking() moves it on so late audio from an older reply is ignored. */
 let turn = 0;
 
@@ -121,6 +166,7 @@ function browserSpeak(
   const finish = () => {
     if (done) return;
     done = true;
+    talking = false;
     if (my === turn) on.end?.();
   };
   const go = () => {
@@ -132,7 +178,14 @@ function browserSpeak(
     u.rate = 1.03;
     u.pitch = 1.05;
     u.volume = 1;
-    u.onstart = () => on.start?.();
+    u.onstart = () => {
+      talking = true;
+      on.start?.();
+    };
+    (u as SpeechSynthesisUtterance & { onboundary: unknown }).onboundary =
+      () => {
+        wordPulse = 1;
+      };
     u.onend = finish;
     u.onerror = finish;
     synth.speak(u);
@@ -181,6 +234,7 @@ export function speak(
       const end = () => {
         if (ended) return;
         ended = true;
+        talking = false;
         if (my === turn) on.end?.();
       };
       p.onended = end;
@@ -190,6 +244,9 @@ export function speak(
           end();
       };
       p.src = currentUrl;
+      wireAnalyser();
+      audioCtx?.resume().catch(() => {});
+      talking = true;
       on.start?.();
       await p.play().catch(() => {
         ended = true;
@@ -201,6 +258,7 @@ export function speak(
 
 export function stopSpeaking() {
   turn++;
+  talking = false;
   try {
     window.speechSynthesis?.cancel();
   } catch {}

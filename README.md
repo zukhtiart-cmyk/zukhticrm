@@ -64,6 +64,10 @@ Photo reading needs the Anthropic key.
 - Tap Zuki while it's talking to interrupt it.
 - Zuki smiles after a save and looks worried when something goes wrong.
 
+**3D Zuki.** In the panel and on the Voice Desk, Zuki is a real 3D character: it looks at your finger or mouse, blinks, moves its mouth while it talks, raises an arm and shows sound rings while listening, looks up with thinking dots, cheers after a save and frowns when something fails. Tap it to talk (it boings); drag sideways to spin it. It loads only when Zuki is on screen, pauses when hidden, and falls back to the flat drawing on phones without 3D or with “reduce motion” on. The floating Zuki button follows you with its eyes and, once a session, pops up the most useful nudge for today.
+
+**Interactive pipeline.** On Leads, drag a card to another stage (long-press on a phone) — it saves straight away and is noted on the lead's history. Stat cards and project cards lean toward the mouse with a soft light; project cards show a stage trail with the current stage glowing.
+
 **Natural voice (optional).** By default Zuki uses the phone's best built-in voice. For a much more human voice, add one of these in Vercel → Settings → Environment Variables and redeploy:
 
 - `ELEVENLABS_API_KEY` (from elevenlabs.io), and optionally `ELEVENLABS_VOICE_ID` to pick a voice from their Voice Library (an Indian-English voice works well for Hinglish) and `ELEVENLABS_MODEL` (default `eleven_multilingual_v2`).

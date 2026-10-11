@@ -1,5 +1,22 @@
 "use client";
 
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
+
+const Zuki3D = dynamic(() => import("./zuki-3d"), { ssr: false });
+
+/** 3D needs WebGL; people who asked their phone for less motion get the flat drawing. */
+function can3D() {
+  try {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      return false;
+    const c = document.createElement("canvas");
+    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Zuki — the Voice Desk assistant. An original character: a little brass "house" with a lamp antenna.
  * States: idle (floats and blinks), speaking (mouth moves), listening (sound waves, wide eyes), thinking (looks up, dots).
@@ -67,6 +84,10 @@ export function Zuki({
   disabled?: boolean;
   size?: number;
 }) {
+  const [three, setThree] = useState<"off" | "loading" | "ready">("off");
+  useEffect(() => {
+    if (can3D()) setThree("loading");
+  }, []);
   return (
     <div className="flex flex-col items-center">
       <style>{CSS}</style>
@@ -87,185 +108,217 @@ export function Zuki({
         <span className="absolute -bottom-2 left-1/2 h-4 w-4 -translate-x-1/2 rotate-45 border-b border-r border-line bg-paper" />
       </div>
 
-      <button
-        type="button"
-        onClick={onTap}
-        disabled={disabled}
+      <div
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
+        onClick={three === "ready" || disabled ? undefined : onTap}
+        onKeyDown={(e) => {
+          if (!disabled && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            onTap();
+          }
+        }}
         aria-label={
           state === "listening" ? "Stop listening" : "Tap Zuki to speak"
         }
-        className={`zk zk-${state} relative select-none outline-none disabled:opacity-60`}
+        className={`zk zk-${state} relative grid select-none place-items-center rounded-3xl outline-none focus-visible:ring-2 focus-visible:ring-brass ${disabled ? "opacity-60" : ""}`}
+        style={{ width: Math.round(size * 1.25), height: size }}
       >
-        <svg
-          viewBox="0 0 200 200"
-          width={size}
-          height={size}
-          aria-hidden="true"
+        {three !== "off" && (
+          <div className="absolute inset-0">
+            <Zuki3D
+              state={state}
+              size={size}
+              onTap={onTap}
+              disabled={disabled}
+              onReady={() => setThree("ready")}
+              onFail={() => setThree("off")}
+            />
+          </div>
+        )}
+        <div
+          className="pointer-events-none transition-opacity duration-300"
+          style={{ opacity: three === "ready" ? 0 : 1 }}
         >
-          {/* Listening waves */}
-          <g
-            className="zk-waves"
-            fill="none"
-            stroke="var(--color-olive)"
-            strokeWidth="5"
-            strokeLinecap="round"
+          <svg
+            viewBox="0 0 200 200"
+            width={size}
+            height={size}
+            aria-hidden="true"
           >
-            <path className="zk-w1" d="M30 95 q-10 15 0 30" />
-            <path className="zk-w2" d="M16 85 q-17 25 0 50" />
-            <path className="zk-w1" d="M170 95 q10 15 0 30" />
-            <path className="zk-w2" d="M184 85 q17 25 0 50" />
-          </g>
+            {/* Listening waves */}
+            <g
+              className="zk-waves"
+              fill="none"
+              stroke="var(--color-olive)"
+              strokeWidth="5"
+              strokeLinecap="round"
+            >
+              <path className="zk-w1" d="M30 95 q-10 15 0 30" />
+              <path className="zk-w2" d="M16 85 q-17 25 0 50" />
+              <path className="zk-w1" d="M170 95 q10 15 0 30" />
+              <path className="zk-w2" d="M184 85 q17 25 0 50" />
+            </g>
 
-          {/* Shadow stays on the ground while Zuki floats */}
-          <ellipse
-            className="zk-shadow"
-            cx="100"
-            cy="186"
-            rx="44"
-            ry="6"
-            fill="#1f1c18"
-            opacity="0.12"
-          />
-          <g className="zk-body">
-            {/* Antenna lamp */}
-            <line
-              x1="100"
-              y1="38"
-              x2="100"
-              y2="22"
-              stroke="var(--color-ink)"
-              strokeWidth="4"
-              strokeLinecap="round"
-            />
-            <circle
-              className="zk-lamp"
-              cx="100"
-              cy="17"
-              r="8"
-              fill="var(--color-brass)"
-            />
-            {/* Roof */}
-            <path
-              d="M44 78 L100 34 L156 78 Z"
-              fill="var(--color-ink)"
-              strokeLinejoin="round"
-              stroke="var(--color-ink)"
-              strokeWidth="8"
-            />
-            {/* Face / house */}
-            <rect
-              x="48"
-              y="66"
-              width="104"
-              height="104"
-              rx="30"
-              fill="var(--color-brass)"
-            />
-            <rect x="58" y="76" width="84" height="84" rx="24" fill="#f6ead8" />
-            {/* Cheeks */}
-            <circle cx="72" cy="132" r="7" fill="#e9b7a3" opacity="0.8" />
-            <circle cx="128" cy="132" r="7" fill="#e9b7a3" opacity="0.8" />
-            {/* Eyes */}
-            <g className="zk-eyes">
-              <g className="zk-eye">
-                <ellipse
-                  cx="82"
-                  cy="112"
-                  rx="7"
-                  ry="9"
-                  fill="var(--color-ink)"
-                />
-                <circle
-                  className="zk-glint"
-                  cx="84.5"
-                  cy="108.5"
-                  r="2.3"
-                  fill="#fff"
-                />
-              </g>
-              <g className="zk-eye">
-                <ellipse
-                  cx="118"
-                  cy="112"
-                  rx="7"
-                  ry="9"
-                  fill="var(--color-ink)"
-                />
-                <circle
-                  className="zk-glint"
-                  cx="120.5"
-                  cy="108.5"
-                  r="2.3"
-                  fill="#fff"
-                />
-              </g>
-            </g>
-            {/* Happy: eyes close into little arcs */}
-            <g
-              className="zk-happy-eyes"
-              fill="none"
-              stroke="var(--color-ink)"
-              strokeWidth="4.5"
-              strokeLinecap="round"
-            >
-              <path d="M74 114 q8 -10 16 0" />
-              <path d="M110 114 q8 -10 16 0" />
-            </g>
-            {/* Concerned: worried brows */}
-            <g
-              className="zk-brows"
-              stroke="var(--color-ink)"
-              strokeWidth="3.5"
-              strokeLinecap="round"
-            >
-              <path d="M74 96 l14 -5" />
-              <path d="M126 96 l-14 -5" />
-            </g>
-            <path
-              className="zk-frown"
-              d="M90 141 q10 -6 20 0"
-              fill="none"
-              stroke="var(--color-ink)"
-              strokeWidth="4"
-              strokeLinecap="round"
-            />
-            {/* Mouth: a smile when idle, opens when speaking, small "o" when listening */}
-            <path
-              className="zk-smile"
-              d="M88 136 q12 10 24 0"
-              fill="none"
-              stroke="var(--color-ink)"
-              strokeWidth="4"
-              strokeLinecap="round"
-            />
+            {/* Shadow stays on the ground while Zuki floats */}
             <ellipse
-              className="zk-mouth"
+              className="zk-shadow"
               cx="100"
-              cy="139"
-              rx="9"
+              cy="186"
+              rx="44"
               ry="6"
-              fill="var(--color-ink)"
+              fill="#1f1c18"
+              opacity="0.12"
             />
-            {/* Little arms */}
-            <path
-              className="zk-arm-l"
-              d="M48 128 q-14 4 -16 18"
-              fill="none"
-              stroke="var(--color-brass)"
-              strokeWidth="8"
-              strokeLinecap="round"
-            />
-            <path
-              className="zk-arm-r"
-              d="M152 128 q14 4 16 18"
-              fill="none"
-              stroke="var(--color-brass)"
-              strokeWidth="8"
-              strokeLinecap="round"
-            />
-          </g>
-        </svg>
-      </button>
+            <g className="zk-body">
+              {/* Antenna lamp */}
+              <line
+                x1="100"
+                y1="38"
+                x2="100"
+                y2="22"
+                stroke="var(--color-ink)"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+              <circle
+                className="zk-lamp"
+                cx="100"
+                cy="17"
+                r="8"
+                fill="var(--color-brass)"
+              />
+              {/* Roof */}
+              <path
+                d="M44 78 L100 34 L156 78 Z"
+                fill="var(--color-ink)"
+                strokeLinejoin="round"
+                stroke="var(--color-ink)"
+                strokeWidth="8"
+              />
+              {/* Face / house */}
+              <rect
+                x="48"
+                y="66"
+                width="104"
+                height="104"
+                rx="30"
+                fill="var(--color-brass)"
+              />
+              <rect
+                x="58"
+                y="76"
+                width="84"
+                height="84"
+                rx="24"
+                fill="#f6ead8"
+              />
+              {/* Cheeks */}
+              <circle cx="72" cy="132" r="7" fill="#e9b7a3" opacity="0.8" />
+              <circle cx="128" cy="132" r="7" fill="#e9b7a3" opacity="0.8" />
+              {/* Eyes */}
+              <g className="zk-eyes">
+                <g className="zk-eye">
+                  <ellipse
+                    cx="82"
+                    cy="112"
+                    rx="7"
+                    ry="9"
+                    fill="var(--color-ink)"
+                  />
+                  <circle
+                    className="zk-glint"
+                    cx="84.5"
+                    cy="108.5"
+                    r="2.3"
+                    fill="#fff"
+                  />
+                </g>
+                <g className="zk-eye">
+                  <ellipse
+                    cx="118"
+                    cy="112"
+                    rx="7"
+                    ry="9"
+                    fill="var(--color-ink)"
+                  />
+                  <circle
+                    className="zk-glint"
+                    cx="120.5"
+                    cy="108.5"
+                    r="2.3"
+                    fill="#fff"
+                  />
+                </g>
+              </g>
+              {/* Happy: eyes close into little arcs */}
+              <g
+                className="zk-happy-eyes"
+                fill="none"
+                stroke="var(--color-ink)"
+                strokeWidth="4.5"
+                strokeLinecap="round"
+              >
+                <path d="M74 114 q8 -10 16 0" />
+                <path d="M110 114 q8 -10 16 0" />
+              </g>
+              {/* Concerned: worried brows */}
+              <g
+                className="zk-brows"
+                stroke="var(--color-ink)"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+              >
+                <path d="M74 96 l14 -5" />
+                <path d="M126 96 l-14 -5" />
+              </g>
+              <path
+                className="zk-frown"
+                d="M90 141 q10 -6 20 0"
+                fill="none"
+                stroke="var(--color-ink)"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+              {/* Mouth: a smile when idle, opens when speaking, small "o" when listening */}
+              <path
+                className="zk-smile"
+                d="M88 136 q12 10 24 0"
+                fill="none"
+                stroke="var(--color-ink)"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+              <ellipse
+                className="zk-mouth"
+                cx="100"
+                cy="139"
+                rx="9"
+                ry="6"
+                fill="var(--color-ink)"
+              />
+              {/* Little arms */}
+              <path
+                className="zk-arm-l"
+                d="M48 128 q-14 4 -16 18"
+                fill="none"
+                stroke="var(--color-brass)"
+                strokeWidth="8"
+                strokeLinecap="round"
+              />
+              <path
+                className="zk-arm-r"
+                d="M152 128 q14 4 16 18"
+                fill="none"
+                stroke="var(--color-brass)"
+                strokeWidth="8"
+                strokeLinecap="round"
+              />
+            </g>
+          </svg>
+        </div>
+      </div>
 
       {userText && (
         <p className="zk-heard mt-1 max-w-sm rounded-2xl bg-ink px-3 py-1.5 text-center text-sm text-paper">

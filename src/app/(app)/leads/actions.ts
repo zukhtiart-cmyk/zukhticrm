@@ -79,6 +79,22 @@ export async function setLeadStatus(form: FormData) {
   revalidatePath(`/leads/${lead.id}`);
 }
 
+/** Drag-and-drop on the pipeline board. */
+export async function moveLead(id: string, status: string): Promise<{ ok?: true; error?: string }> {
+  try {
+    const { lead, user } = await loadLead(id);
+    const next = z.enum(leadStatusEnum.enumValues).parse(status);
+    if (next === lead.status) return { ok: true };
+    await db.update(leads).set({ status: next }).where(eq(leads.id, lead.id));
+    await db.insert(leadActivities).values({ leadId: lead.id, userId: user.id, type: "NOTE", summary: `Moved to ${next.toLowerCase().replace("_", " ")} on the pipeline board` }).catch(() => {});
+    revalidatePath("/leads");
+    revalidatePath(`/leads/${lead.id}`);
+    return { ok: true };
+  } catch (e) {
+    return { error: (e as Error).message || "Couldn't move the lead." };
+  }
+}
+
 export async function logActivity(form: FormData) {
   const { user, lead } = await loadLead(String(form.get("id")));
   const summary = String(form.get("summary") ?? "").trim();

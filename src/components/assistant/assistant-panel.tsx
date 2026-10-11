@@ -589,7 +589,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <Zuki
-            size={132}
+            size={170}
             state={state}
             bubble={bubble}
             userText={listening ? interim || "…" : busy ? heard : undefined}

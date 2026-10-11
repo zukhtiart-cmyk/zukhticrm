@@ -235,14 +235,56 @@ label:focus-within > .label {
   color: var(--color-brass);
 }
 
+/* Cards that lean toward the mouse (see components/tilt.tsx). */
+.tilt {
+  position: relative;
+  border-radius: 1rem;
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+.tilt[data-on] {
+  transition: transform 0.08s linear;
+}
+.tilt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgb(255 246 228 / 0.55), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  mix-blend-mode: soft-light;
+}
+.tilt[data-on]::after {
+  opacity: 1;
+}
+
+/* Project stage trail: pips pop in one after another; the current stage breathes. */
+.stage-pip {
+  transform-origin: left;
+  animation: zk-fill 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.stage-now {
+  animation:
+    zk-fill 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) backwards,
+    zk-breathe 1.8s ease-in-out 1s infinite;
+}
+@keyframes zk-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(154 113 64 / 0.5); }
+  50% { box-shadow: 0 0 0 4px rgb(154 113 64 / 0); }
+}
+
 /* ---------- Motion ---------- */
 
 /* One entrance per screen: the page settles in, its blocks follow a beat behind. */
+/* "backwards", not "both": once the entrance ends it lets go, so fixed overlays and drags position normally. */
 .page-in {
-  animation: zk-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: zk-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 .page-in > * {
-  animation: zk-rise 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: zk-rise 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 .page-in > *:nth-child(2) {
   animation-delay: 0.05s;

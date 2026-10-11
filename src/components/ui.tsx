@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { titleCase } from "@/lib/format";
 import { CountUp } from "./count-up";
+import { Tilt } from "./tilt";
 import { ZukiFace } from "./zuki";
 export { ProgressBar } from "./progress-bar";
 
@@ -112,13 +113,15 @@ export function Stat({
   hint?: React.ReactNode;
 }) {
   return (
-    <div className="card p-4">
-      <p className="text-[13px] font-semibold text-muted">{label}</p>
-      <p className="h-display mt-1 text-3xl">
-        <CountUp value={value} />
-      </p>
-      {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
-    </div>
+    <Tilt>
+      <div className="card h-full p-4">
+        <p className="text-[13px] font-semibold text-muted">{label}</p>
+        <p className="h-display mt-1 text-3xl">
+          <CountUp value={value} />
+        </p>
+        {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
+      </div>
+    </Tilt>
   );
 }
 
