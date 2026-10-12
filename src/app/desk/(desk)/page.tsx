@@ -14,6 +14,7 @@ import { whatsappConfigured } from "@/lib/whatsapp";
 import { dateTime } from "@/lib/format";
 import { Badge } from "@/components/ui";
 import { VoiceDesk, type ProjectSnapshot } from "./voice-desk";
+import { canTranscribe } from "@/lib/voice-ai";
 
 export default async function DeskPage({
   searchParams,
@@ -50,7 +51,7 @@ export default async function DeskPage({
           key={mode}
           kind={mode}
           offices={officeRows.map((o) => ({ id: o.id, name: o.name }))}
-          serverSpeech={!!process.env.OPENAI_API_KEY}
+          serverSpeech={canTranscribe()}
           initialText={initialText}
         />
       </div>
@@ -136,7 +137,7 @@ export default async function DeskPage({
         defaultSend={defaultSendToClient[user.role]}
         whatsappReady={whatsappConfigured()}
         guide={deskGuide[user.role]}
-        serverSpeech={!!process.env.OPENAI_API_KEY}
+        serverSpeech={canTranscribe()}
         perms={{
           stages: can(user.role, "stages"),
           payments: can(user.role, "payments"),

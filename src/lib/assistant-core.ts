@@ -39,7 +39,9 @@ export type TurnInput = {
   /** The last few lines of the conversation, oldest first. */
   history?: HistoryTurn[];
   /** WhatsApp asks for YES itself, so the read-back doesn't end with a question there. */
-  channel?: "app" | "whatsapp";
+  channel?: "app" | "whatsapp" | "device";
+  /** The desk device has no camera: snags are saved without a photo (it can be added in the app). */
+  noCamera?: boolean;
 };
 
 export type TurnOutput = AssistantReply & {
@@ -68,7 +70,7 @@ export async function planTurn(
 
   // "Haan, save kar do" / "no, cancel" — answered without the AI.
   if (
-    input.channel !== "whatsapp" &&
+    (input.channel ?? "app") === "app" &&
     !input.photo &&
     actions.length &&
     isShortNo(text)
@@ -85,7 +87,7 @@ export async function planTurn(
     };
   }
   if (
-    input.channel !== "whatsapp" &&
+    (input.channel ?? "app") === "app" &&
     !input.photo &&
     actions.length &&
     isShortYes(text)
@@ -191,6 +193,10 @@ export async function planTurn(
   );
   if (attachPhotoTo !== undefined) attachPhotoTo = remap.get(attachPhotoTo);
 
+  if (input.noCamera)
+    actions = actions.map((a) =>
+      a.type === "snag" ? { ...a, photoSkipped: true } : a,
+    );
   const {
     actions: final,
     missing,
@@ -201,7 +207,12 @@ export async function planTurn(
     .map((t) => BLOCKED_TEXT[t])
     .filter(Boolean)
     .join(" ");
-  const savable = final.filter((a) => !HANDOFF.includes(a.type));
+  // In the app a site update opens the review screen; on WhatsApp and the desk device it's saved directly.
+  const inApp = (input.channel ?? "app") === "app";
+  const handoffTypes = inApp
+    ? HANDOFF
+    : HANDOFF.filter((t) => t !== "project_update");
+  const savable = final.filter((a) => !handoffTypes.includes(a.type));
   const readyToSave = !!savable.length && !missing.some((m) => !m.optional);
   // A short human acknowledgement from the AI ("Got it, Ramesh ji."), then the facts, built here so they're exact.
   // Don't open every reply the same way ("Got it. … Got it. …") — skip an acknowledgement Zuki just used.
@@ -229,7 +240,9 @@ export async function planTurn(
       [
         input.photo ? lead : answers.length ? "" : ack,
         handoffOnly
-          ? `${readback} I'll open it so you can check and finish.`
+          ? inApp
+            ? `${readback} I'll open it so you can check and finish.`
+            : `${readback} That one is finished in the app.`
           : input.channel === "whatsapp"
             ? readback
             : `${readback} Shall I save ${savable.length > 1 ? "them" : "it"}?`,

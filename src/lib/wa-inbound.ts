@@ -13,7 +13,7 @@ import {
 import { decideReply, HANDOVER_REPLY } from "./wa-assistant";
 import { projectFacts } from "./wa-facts";
 import { downloadMedia, markRead } from "./whatsapp";
-import { transcribe } from "./voice-ai";
+import { canTranscribe, transcribe } from "./voice-ai";
 import { handleStaffMessage, staffForPhone } from "./wa-staff";
 
 /** One message as WhatsApp delivers it to the webhook. */
@@ -67,7 +67,7 @@ async function readText(
         understood: true,
       };
     case "audio":
-      if (process.env.OPENAI_API_KEY && msg.audio?.id) {
+      if (canTranscribe() && msg.audio?.id) {
         try {
           const blob = await downloadMedia(msg.audio.id);
           const ext = (msg.audio.mime_type ?? "audio/ogg").includes("mpeg")

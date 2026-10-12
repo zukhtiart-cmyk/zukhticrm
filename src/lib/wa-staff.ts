@@ -2,35 +2,23 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { assistantSessions, db, users } from "@/db";
 import { can } from "./permissions";
-import { executeActions, planTurn } from "./assistant-core";
-import {
-  ACTION_LABEL,
-  handoffHref,
-  type AssistantAction,
-  YES_RE as YES,
-  NO_RE as NO,
-} from "./assistant-types";
-import { buildVoiceContext } from "./voice-context";
-import { basicUnderstand, transcribe, understand } from "./voice-ai";
-import { applyVoiceUpdate } from "./voice-apply";
+import { canTranscribe, transcribe } from "./voice-ai";
 import { downloadMedia, normalizePhone, phoneKey, sendText } from "./whatsapp";
-import type { VoiceProposal } from "./voice-types";
 import type { InboundMessage } from "./wa-inbound";
+import {
+  EMPTY_CONV,
+  staffTurn,
+  type ConvState,
+  type Photo,
+} from "./staff-conversation";
 
 /**
  * Zuki on WhatsApp for the team: staff message the company number (text, voice note or photo)
  * and Zuki files it exactly like the in-app assistant. Saves only after they reply YES.
  */
 
-type Photo = { mediaId: string; mime: string };
-type State = {
-  actions: AssistantAction[];
-  asking: { index: number; field: string } | null;
-  photos: Record<number, Photo>;
-  /** Project updates: the understood changes, shown before saving. */
-  proposals: Record<number, { proposal: VoiceProposal; lines: string[] }>;
-};
-const EMPTY: State = { actions: [], asking: null, photos: {}, proposals: {} };
+type State = ConvState;
+const EMPTY: State = EMPTY_CONV;
 const EXPIRE_MS = 3 * 3600 * 1000;
 
 /** The active staff member who owns this WhatsApp number, if any. */
@@ -85,60 +73,6 @@ async function store(
     .onConflictDoUpdate({ target: assistantSessions.userId, set: values });
 }
 
-function describeProposal(
-  p: VoiceProposal,
-  ctx: Awaited<ReturnType<typeof buildVoiceContext>>,
-) {
-  if (!ctx) return [];
-  const c = ctx.ctx;
-  const lines: string[] = [];
-  for (const s of p.stageUpdates)
-    lines.push(
-      `${c.stages.find((x) => x.id === s.stageId)?.name ?? "Stage"} → ${s.status === "DONE" ? "done" : `${s.progress}%`}`,
-    );
-  for (const m of p.payments)
-    lines.push(
-      `Client payment: ${c.milestones.find((x) => x.id === m.milestoneId)?.label ?? "milestone"} ${c.project.currency} ${m.amount.toLocaleString("en-IN")}`,
-    );
-  for (const o of p.orders)
-    lines.push(
-      `Order: ${o.item} → ${o.status.toLowerCase().replace("_", " ")}${o.eta ? ` (ETA ${o.eta})` : ""}`,
-    );
-  for (const v of p.visits)
-    lines.push(`Visit: ${v.title} ${v.at.replace("T", " ")}`);
-  for (const i of p.issues.filter(Boolean)) lines.push(`Issue: ${i}`);
-  return lines;
-}
-
-function card(
-  a: AssistantAction,
-  i: number,
-  st: State,
-  names: {
-    project: (id?: string | null) => string;
-    contractor: (id?: string | null) => string;
-  },
-) {
-  const n = `${i + 1}. *${ACTION_LABEL[a.type]}*`;
-  const amt = a.amount ? ` ₹${a.amount.toLocaleString("en-IN")}` : "";
-  switch (a.type) {
-    case "payment":
-      return `${n}: ${amt} to ${names.contractor(a.contractorId)} for ${names.project(a.projectId)}${a.mode ? ` by ${a.mode}` : ""}${a.kind === "BILL" ? ` (pays bill ${a.billLabel})` : a.kind === "WAGES" ? " (wages)" : ""}`;
-    case "expense":
-      return `${n}: ${amt} — ${a.description ?? ""} (${names.project(a.projectId)})${st.photos[i] ? " 📷" : ""}`;
-    case "snag":
-      return `${n}: ${a.room ? `${a.room} — ` : ""}${a.description ?? ""} (${names.project(a.projectId)})${st.photos[i] ? " 📷" : ""}`;
-    case "bill":
-      return `${n}: ${amt} from ${names.contractor(a.contractorId)} for ${names.project(a.projectId)}${a.note ? ` — ${a.note}` : ""}`;
-    case "project_update": {
-      const lines = st.proposals[i]?.lines ?? [];
-      return `${n} for ${names.project(a.projectId)}:${lines.length ? `\n   • ${lines.join("\n   • ")}` : ` “${a.text}”`}`;
-    }
-    default:
-      return `${n}`;
-  }
-}
-
 async function reply(to: string, text: string) {
   try {
     await sendText(to, text.slice(0, 3900));
@@ -169,7 +103,7 @@ export async function handleStaffMessage(
       msg.interactive?.list_reply?.title ??
       "";
   else if (msg.type === "audio" && msg.audio?.id) {
-    if (!process.env.OPENAI_API_KEY) {
+    if (!canTranscribe()) {
       await store(user.id, state, awaiting, seen);
       await reply(
         to,
@@ -219,147 +153,29 @@ export async function handleStaffMessage(
   }
   text = text.trim();
 
-  // ---- YES / NO while waiting to save ----
-  if (awaiting && !photo && YES.test(text)) {
-    const results: string[] = [];
-    // Photos come from WhatsApp; fetch them again at save time.
-    const files: Record<number, File> = {};
-    for (const [k, p] of Object.entries(state.photos)) {
-      try {
+  const out = await staffTurn(
+    user,
+    { state, awaiting },
+    {
+      text,
+      channel: "whatsapp",
+      appUrl,
+      photo,
+      photoRef,
+      refetchPhoto: async (p) => {
         const blob = await downloadMedia(p.mediaId);
-        files[Number(k)] = new File([blob], "whatsapp.jpg", { type: p.mime });
-      } catch (e) {
-        console.error("re-download of WhatsApp photo failed", e);
-      }
-    }
-    const out = await executeActions(
-      user,
-      state.actions,
-      (i) => files[i] ?? null,
-    ).catch((e) => ({ error: (e as Error).message, results: [] }));
-    if (out.error) results.push(`✗ ${out.error}`);
-    for (const r of out.results)
-      results.push(
-        `${r.ok ? "✓" : "✗"} ${r.message}${r.ok && r.href ? `\n   ${appUrl}${r.href}` : ""}`,
-      );
-    // Project updates save directly from WhatsApp (internal only; the client isn't messaged).
-    for (const [k, p] of Object.entries(state.proposals)) {
-      const a = state.actions[Number(k)];
-      if (!a || a.type !== "project_update" || !a.projectId) continue;
-      const res = await applyVoiceUpdate(
-        user,
-        {
-          ...p.proposal,
-          projectId: a.projectId,
-          transcript: a.text ?? "",
-          audioUrl: null,
-          photos: [],
-          sendToClient: false,
-          clientMessage: p.proposal.clientMessage ?? "",
-        },
-        appUrl,
-      );
-      results.push(
-        res.ok
-          ? `✓ Project update saved (not sent to the client — send it from the Voice Desk if needed).\n   ${appUrl}/projects/${a.projectId}`
-          : `✗ Project update: ${res.error}`,
-      );
-    }
-    // Leads / contractors still open in the app.
-    for (const a of state.actions.filter(
-      (x) =>
-        x.type === "new_lead" ||
-        x.type === "new_contractor" ||
-        x.type === "measurements",
-    ))
-      results.push(
-        `➜ ${ACTION_LABEL[a.type]}: finish here ${appUrl}${handoffHref(a)}`,
-      );
-    await store(user.id, { ...EMPTY }, false, seen);
-    await reply(to, results.join("\n") || "Nothing to save.");
-    return { action: "saved" as const };
-  }
-  if (NO.test(text) && !photo && (awaiting || state.actions.length)) {
-    await store(user.id, { ...EMPTY }, false, seen);
-    await reply(
-      to,
-      "OK, cleared. Tell me something new whenever you're ready.",
-    );
-    return { action: "cleared" as const };
-  }
-
-  // ---- Understand ----
-  const photoIdx = new Set(
-    Object.keys(state.photos)
-      .map(Number)
-      .filter((i) => i < state.actions.length),
+        return new File([blob], "whatsapp.jpg", { type: p.mime });
+      },
+    },
   );
-  // A photo while a snag is waiting for one is that snag's photo.
-  if (photo && state.asking?.field === "photo") {
-    state.photos[state.asking.index] = photoRef!;
-    photoIdx.add(state.asking.index);
-    photo = null;
-  }
-  const turn = await planTurn(user, {
-    text,
-    actions: state.actions,
-    asking: state.asking,
-    photos: photoIdx,
-    photo,
-    channel: "whatsapp",
-  });
-  const next: State = {
-    actions: turn.actions,
-    asking: turn.asking,
-    photos: {},
-    proposals: {},
+  await store(user.id, out.next.state, out.next.awaiting, seen);
+  await reply(to, out.text);
+  return {
+    action:
+      out.kind === "confirm"
+        ? ("confirm" as const)
+        : out.kind === "asked"
+          ? ("asked" as const)
+          : out.kind,
   };
-  // Keep photos attached to the same items (positions only shift when question cards are dropped, which come last).
-  for (const [k, p] of Object.entries(state.photos))
-    if (Number(k) < turn.actions.length) next.photos[Number(k)] = p;
-  if (photoRef && turn.attachPhotoTo !== undefined && photo)
-    next.photos[turn.attachPhotoTo] = photoRef;
-
-  // Understand project updates now, so the person sees exactly what will change.
-  for (const [i, a] of turn.actions.entries()) {
-    if (a.type !== "project_update" || !a.projectId) continue;
-    const built = await buildVoiceContext(a.projectId, user);
-    if (!built) continue;
-    let proposal: VoiceProposal;
-    try {
-      proposal = process.env.ANTHROPIC_API_KEY
-        ? await understand(a.text ?? text, built.ctx)
-        : basicUnderstand(a.text ?? text, built.ctx);
-    } catch {
-      proposal = basicUnderstand(a.text ?? text, built.ctx);
-    }
-    next.proposals[i] = { proposal, lines: describeProposal(proposal, built) };
-  }
-
-  const names = {
-    project: (id?: string | null) =>
-      turn.context.projects.find((p) => p.id === id)?.name ?? "?project",
-    contractor: (id?: string | null) =>
-      turn.context.contractors.find((c) => c.id === id)?.name ?? "?contractor",
-  };
-  const blocking = turn.missing.filter((m) => !m.optional);
-  const ready = turn.actions.length > 0 && !blocking.length;
-  const parts = [
-    turn.reply
-      .replace(/Check (these \d+ items|the [^.]+) and tap Confirm\./, "")
-      .replace(
-        "Tap the camera button — or say “skip”.",
-        "Send it here — or reply “skip”.",
-      )
-      .trim(),
-  ];
-  if (turn.actions.length)
-    parts.push(turn.actions.map((a, i) => card(a, i, next, names)).join("\n"));
-  if (ready)
-    parts.push(
-      "Reply *YES* to save, or tell me what to change. Reply *NO* to cancel.",
-    );
-  await store(user.id, next, ready, seen);
-  await reply(to, parts.filter(Boolean).join("\n\n"));
-  return { action: ready ? ("confirm" as const) : ("asked" as const) };
 }

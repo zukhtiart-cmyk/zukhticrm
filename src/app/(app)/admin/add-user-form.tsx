@@ -4,9 +4,17 @@ import { useActionState } from "react";
 import { addUser } from "./actions";
 import { roleLabels } from "@/lib/permissions";
 
-export function AddUserForm({ offices, canAddOwner }: { offices: { id: string; name: string }[]; canAddOwner: boolean }) {
+export function AddUserForm({
+  offices,
+  canAddOwner,
+}: {
+  offices: { id: string; name: string }[];
+  canAddOwner: boolean;
+}) {
   const [state, action, pending] = useActionState(addUser, undefined);
-  const roles = Object.entries(roleLabels).filter(([r]) => canAddOwner || r !== "OWNER");
+  const roles = Object.entries(roleLabels).filter(
+    ([r]) => canAddOwner || r !== "OWNER",
+  );
   return (
     <form action={action} className="grid gap-3 sm:grid-cols-2">
       <div>
@@ -43,13 +51,21 @@ export function AddUserForm({ offices, canAddOwner }: { offices: { id: string; n
       </div>
       <div>
         <label className="label">Temporary password</label>
-        <input name="password" type="text" minLength={8} required className="input" />
+        <input
+          name="password"
+          type="text"
+          minLength={8}
+          required
+          className="input"
+        />
       </div>
       <div className="flex items-center gap-3 sm:col-span-2">
         <button className="btn-primary" disabled={pending}>
           {pending ? "Adding…" : "Add team member"}
         </button>
-        {state?.error && <span className="text-sm text-clay">{state.error}</span>}
+        {state?.error && (
+          <span className="text-sm text-clay">{state.error}</span>
+        )}
         {state?.ok && <span className="text-sm text-olive">{state.ok}</span>}
       </div>
     </form>

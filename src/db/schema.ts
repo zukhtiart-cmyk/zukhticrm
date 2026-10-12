@@ -500,6 +500,30 @@ export const assistantSessions = pgTable("assistant_sessions", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Zuki desk devices (ESP32 screens): each one is paired to one staff member and talks as them. */
+export const devices = pgTable("devices", {
+  id: id(),
+  name: text("name").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** 6-digit code typed on the device once; cleared after pairing. */
+  pairingCode: text("pairing_code"),
+  pairingExpiresAt: timestamp("pairing_expires_at", { withTimezone: true }),
+  /** sha256 of the device's secret token; the token itself is only ever on the device. */
+  tokenHash: text("token_hash").unique(),
+  pairedAt: timestamp("paired_at", { withTimezone: true }),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  battery: integer("battery"),
+  firmware: text("firmware"),
+  /** The conversation in progress (same shape as the WhatsApp one). */
+  state: jsonb("state").notNull().default({}),
+  awaitingConfirm: boolean("awaiting_confirm").notNull().default(false),
+  stateUpdatedAt: timestamp("state_updated_at", { withTimezone: true }),
+  active: boolean("active").notNull().default(true),
+  createdAt: created(),
+});
+
 /** Punch-list items before (and after) handover. */
 export const snags = pgTable("snags", {
   id: id(),
@@ -645,4 +669,5 @@ export const snagsRelations = relations(snags, ({ one }) => ({
   contractor: one(contractors, { fields: [snags.contractorId], references: [contractors.id] }),
   createdBy: one(users, { fields: [snags.createdById], references: [users.id] }),
 }));
+export const devicesRelations = relations(devices, ({ one }) => ({ user: one(users, { fields: [devices.userId], references: [users.id] }) }));
 export const warrantiesRelations = relations(warranties, ({ one }) => ({ project: one(projects, { fields: [warranties.projectId], references: [projects.id] }) }));

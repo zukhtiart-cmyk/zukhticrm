@@ -20,11 +20,20 @@ export async function addUser(_: unknown, form: FormData) {
   const me = await requireUser("admin");
   const parsed = userSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  if (parsed.data.role === "OWNER" && me.role !== "OWNER") return { error: "Only the owner can add another owner." };
-  const exists = await db.query.users.findFirst({ where: eq(users.email, parsed.data.email) });
+  if (parsed.data.role === "OWNER" && me.role !== "OWNER")
+    return { error: "Only the owner can add another owner." };
+  const exists = await db.query.users.findFirst({
+    where: eq(users.email, parsed.data.email),
+  });
   if (exists) return { error: "A user with this email already exists." };
   const { password, ...rest } = parsed.data;
-  await db.insert(users).values({ ...rest, phone: rest.phone || null, passwordHash: await bcrypt.hash(password, 10) });
+  await db
+    .insert(users)
+    .values({
+      ...rest,
+      phone: rest.phone || null,
+      passwordHash: await bcrypt.hash(password, 10),
+    });
   revalidatePath("/admin");
   return { ok: `${rest.name} can now sign in.` };
 }
@@ -44,7 +53,10 @@ export async function resetPassword(form: FormData) {
   const id = String(form.get("id"));
   const password = String(form.get("password") ?? "");
   if (password.length < 8) return;
-  await db.update(users).set({ passwordHash: await bcrypt.hash(password, 10) }).where(eq(users.id, id));
+  await db
+    .update(users)
+    .set({ passwordHash: await bcrypt.hash(password, 10) })
+    .where(eq(users.id, id));
   revalidatePath("/admin");
 }
 
@@ -68,8 +80,12 @@ export async function setUserPhone(form: FormData) {
   const me = await requireUser("admin");
   const id = String(form.get("id"));
   const u = await db.query.users.findFirst({ where: eq(users.id, id) });
-  if (!u || (u.role === "OWNER" && me.role !== "OWNER" && u.id !== me.id)) return;
+  if (!u || (u.role === "OWNER" && me.role !== "OWNER" && u.id !== me.id))
+    return;
   const phone = String(form.get("phone") ?? "").trim();
-  await db.update(users).set({ phone: phone || null }).where(eq(users.id, id));
+  await db
+    .update(users)
+    .set({ phone: phone || null })
+    .where(eq(users.id, id));
   revalidatePath("/admin");
 }
