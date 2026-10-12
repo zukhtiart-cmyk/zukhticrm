@@ -40,6 +40,7 @@ jobs:
           L=~/Arduino/libraries
           note() { echo "::notice title=$1::$(echo "$2" | head -40 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')"; }
           note "touch headers" "$(find $L/SensorLib -iname '*cst9*' | sed "s|$L/||")"
+          note "touchpoints" "$(grep -rhE -A25 '(class|struct) TouchPoints?\b' $L/SensorLib/src --include=*.h* | grep -E 'class|struct|\(|int16_t|uint' | head -30)"
           note "touch api" "$(grep -hE '^\s+(bool|uint8_t|void|int|TouchPoints)[^;(]*\(' $L/SensorLib/src/touch/TouchDrvCST92xx.hpp | head -30)"
           note "touch example" "$(grep -vE '^\s*(\*|//|/\*)' $L/SensorLib/examples/touch/cst9217_get_point/cst9217_get_point.ino | grep -E 'touch\.|TouchDrv|include|begin' | head -30)"
           note "co5300 ctor" "$(grep -A8 'Arduino_CO5300(' $L/GFX_Library_for_Arduino/src/display/Arduino_CO5300.h | head -12)"

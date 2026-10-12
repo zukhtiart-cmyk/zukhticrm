@@ -9,7 +9,7 @@
 #include <WiFi.h>
 #include <Wire.h>
 #include <ImprovWiFiLibrary.h>
-#include <touch/TouchDrvCST92xx.hpp>
+#include <TouchDrv.hpp>
 #define XPOWERS_CHIP_AXP2101
 #include <XPowersLib.h>
 #include <time.h>
@@ -430,11 +430,11 @@ void onTap(int x, int y) {
 
 void readInputs() {
   if (haveTouch) {
-    int16_t xs[2], ys[2];
-    uint8_t n = touch.getPoint(xs, ys, 1);
-    if (n > 0) {
-      tx = xs[0];
-      ty = ys[0];
+    TouchPoints pts = touch.getTouchPoints();
+    if (pts.hasPoints()) {
+      const TouchPoint &pt = pts.getPoint(0);
+      tx = pt.x;
+      ty = pt.y;
       touchDown = true;
     } else if (touchDown) {
       touchDown = false;
