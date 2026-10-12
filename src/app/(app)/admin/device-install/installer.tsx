@@ -20,11 +20,26 @@ export function Installer() {
       document.head.appendChild(s);
     }
   }, []);
-  if (version === undefined) return <p className="text-sm text-muted">Checking for the latest Zuki version…</p>;
+  if (version === undefined)
+    return (
+      <p className="text-sm text-muted">
+        Checking for the latest Zuki version…
+      </p>
+    );
   if (version === null)
-    return <p className="rounded-xl bg-brass-soft px-3 py-2 text-sm text-brass">The Zuki firmware hasn&apos;t been built yet. It builds automatically on GitHub — check back in a few minutes.</p>;
+    return (
+      <p className="rounded-xl bg-brass-soft px-3 py-2 text-sm text-brass">
+        The Zuki firmware hasn&apos;t been built yet. It builds automatically on
+        GitHub — check back in a few minutes.
+      </p>
+    );
   if (!supported)
-    return <p className="rounded-xl bg-clay-soft px-3 py-2 text-sm text-clay">This browser can&apos;t install over USB. Open this page in Chrome or Edge on a computer.</p>;
+    return (
+      <p className="rounded-xl bg-clay-soft px-3 py-2 text-sm text-clay">
+        This browser can&apos;t install over USB. Open this page in Chrome or
+        Edge on a computer.
+      </p>
+    );
   return (
     <div className="flex flex-wrap items-center gap-3">
       {createElement(

@@ -66,6 +66,14 @@ Photo reading needs the Anthropic key.
 
 **3D Zuki.** In the panel and on the Voice Desk, Zuki is a real 3D character: it looks at your finger or mouse, blinks, moves its mouth while it talks, raises an arm and shows sound rings while listening, looks up with thinking dots, cheers after a save and frowns when something fails. Tap it to talk (it boings); drag sideways to spin it. It loads only when Zuki is on screen, pauses when hidden, and falls back to the flat drawing on phones without 3D or with “reduce motion” on. The floating Zuki button follows you with its eyes and, once a session, pops up the most useful nudge for today.
 
+**Zuki desk device.** A small screen on a desk or site table — the Waveshare ESP32-S3-Touch-AMOLED-2.16 board (get the version with the battery; add a small 8 Ω speaker if one isn't included). Zuki appears as a 2D animated character (idle, listening, thinking, talking, happy, worried, dozing). Tap Zuki or press the side button and talk; it stops listening when you pause, reads things back, and saves on “haan / yes” — the same conversation as WhatsApp, as the person the device is paired to.
+
+1. **Install**: Team → Zuki desk devices → *Install Zuki on a new board* (Chrome or Edge on a computer, USB-C cable). It asks for the Wi-Fi at the end.
+2. **Pair**: Team → Zuki desk devices → *Add device* for a team member; type the 6-digit code on the board's keypad (codes last 30 minutes).
+3. **Voice**: the board needs `ELEVENLABS_API_KEY` (hears and speaks with one key) or `OPENAI_API_KEY` with credit (and `ZUKI_VOICE=openai` for its voice). Without it, it shows text only.
+
+The Team page shows each device's battery and when it was last online, and can re-pair, clear the conversation, or remove it. Hold the side button 8 s to make the board forget Wi-Fi and pairing. Firmware source is in `firmware/zuki` (Arduino, ESP32 core 3.2); GitHub Actions compiles it on every change and publishes it to `public/zuki-device` for the install page. `firmware/tools/preview.cpp` renders Zuki's moods on a PC with the same drawing code.
+
 **Interactive pipeline.** On Leads, drag a card to another stage (long-press on a phone) — it saves straight away and is noted on the lead's history. Stat cards and project cards lean toward the mouse with a soft light; project cards show a stage trail with the current stage glowing.
 
 **Natural voice (optional).** By default Zuki uses the phone's best built-in voice. For a much more human voice, add one of these in Vercel → Settings → Environment Variables and redeploy:

@@ -195,7 +195,9 @@ export default async function AdminPage() {
               />
             </div>
             <button className="btn-primary">Add device</button>
-            <a href="/admin/device-install" className="btn-ghost">Install Zuki on a new board</a>
+            <a href="/admin/device-install" className="btn-ghost">
+              Install Zuki on a new board
+            </a>
           </form>
           {!zukiDevices.length ? (
             <p className="text-sm text-muted">No devices yet.</p>
