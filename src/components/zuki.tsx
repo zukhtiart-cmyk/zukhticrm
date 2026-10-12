@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import { ZukiFigure, ZukiHeadParts } from "./zuki-art";
 
 const Zuki3D = dynamic(() => import("./zuki-3d"), { ssr: false });
 
@@ -24,42 +25,8 @@ function can3D() {
 /** Just Zuki's face, for the floating button. */
 export function ZukiFace({ size = 40 }: { size?: number }) {
   return (
-    <svg viewBox="40 30 120 140" width={size} height={size} aria-hidden="true">
-      <line
-        x1="100"
-        y1="38"
-        x2="100"
-        y2="22"
-        stroke="var(--color-ink)"
-        strokeWidth="5"
-        strokeLinecap="round"
-      />
-      <circle cx="100" cy="17" r="8" fill="var(--color-brass)" />
-      <path
-        d="M44 78 L100 34 L156 78 Z"
-        fill="var(--color-ink)"
-        stroke="var(--color-ink)"
-        strokeWidth="8"
-        strokeLinejoin="round"
-      />
-      <rect
-        x="48"
-        y="66"
-        width="104"
-        height="104"
-        rx="30"
-        fill="var(--color-brass)"
-      />
-      <rect x="58" y="76" width="84" height="84" rx="24" fill="#f6ead8" />
-      <ellipse cx="82" cy="112" rx="7" ry="9" fill="var(--color-ink)" />
-      <ellipse cx="118" cy="112" rx="7" ry="9" fill="var(--color-ink)" />
-      <path
-        d="M88 136 q12 10 24 0"
-        fill="none"
-        stroke="var(--color-ink)"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
+    <svg viewBox="40 14 120 120" width={size} height={size} aria-hidden="true">
+      <ZukiHeadParts />
     </svg>
   );
 }
@@ -147,175 +114,7 @@ export function Zuki({
             height={size}
             aria-hidden="true"
           >
-            {/* Listening waves */}
-            <g
-              className="zk-waves"
-              fill="none"
-              stroke="var(--color-olive)"
-              strokeWidth="5"
-              strokeLinecap="round"
-            >
-              <path className="zk-w1" d="M30 95 q-10 15 0 30" />
-              <path className="zk-w2" d="M16 85 q-17 25 0 50" />
-              <path className="zk-w1" d="M170 95 q10 15 0 30" />
-              <path className="zk-w2" d="M184 85 q17 25 0 50" />
-            </g>
-
-            {/* Shadow stays on the ground while Zuki floats */}
-            <ellipse
-              className="zk-shadow"
-              cx="100"
-              cy="186"
-              rx="44"
-              ry="6"
-              fill="#1f1c18"
-              opacity="0.12"
-            />
-            <g className="zk-body">
-              {/* Antenna lamp */}
-              <line
-                x1="100"
-                y1="38"
-                x2="100"
-                y2="22"
-                stroke="var(--color-ink)"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
-              <circle
-                className="zk-lamp"
-                cx="100"
-                cy="17"
-                r="8"
-                fill="var(--color-brass)"
-              />
-              {/* Roof */}
-              <path
-                d="M44 78 L100 34 L156 78 Z"
-                fill="var(--color-ink)"
-                strokeLinejoin="round"
-                stroke="var(--color-ink)"
-                strokeWidth="8"
-              />
-              {/* Face / house */}
-              <rect
-                x="48"
-                y="66"
-                width="104"
-                height="104"
-                rx="30"
-                fill="var(--color-brass)"
-              />
-              <rect
-                x="58"
-                y="76"
-                width="84"
-                height="84"
-                rx="24"
-                fill="#f6ead8"
-              />
-              {/* Cheeks */}
-              <circle cx="72" cy="132" r="7" fill="#e9b7a3" opacity="0.8" />
-              <circle cx="128" cy="132" r="7" fill="#e9b7a3" opacity="0.8" />
-              {/* Eyes */}
-              <g className="zk-eyes">
-                <g className="zk-eye">
-                  <ellipse
-                    cx="82"
-                    cy="112"
-                    rx="7"
-                    ry="9"
-                    fill="var(--color-ink)"
-                  />
-                  <circle
-                    className="zk-glint"
-                    cx="84.5"
-                    cy="108.5"
-                    r="2.3"
-                    fill="#fff"
-                  />
-                </g>
-                <g className="zk-eye">
-                  <ellipse
-                    cx="118"
-                    cy="112"
-                    rx="7"
-                    ry="9"
-                    fill="var(--color-ink)"
-                  />
-                  <circle
-                    className="zk-glint"
-                    cx="120.5"
-                    cy="108.5"
-                    r="2.3"
-                    fill="#fff"
-                  />
-                </g>
-              </g>
-              {/* Happy: eyes close into little arcs */}
-              <g
-                className="zk-happy-eyes"
-                fill="none"
-                stroke="var(--color-ink)"
-                strokeWidth="4.5"
-                strokeLinecap="round"
-              >
-                <path d="M74 114 q8 -10 16 0" />
-                <path d="M110 114 q8 -10 16 0" />
-              </g>
-              {/* Concerned: worried brows */}
-              <g
-                className="zk-brows"
-                stroke="var(--color-ink)"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-              >
-                <path d="M74 96 l14 -5" />
-                <path d="M126 96 l-14 -5" />
-              </g>
-              <path
-                className="zk-frown"
-                d="M90 141 q10 -6 20 0"
-                fill="none"
-                stroke="var(--color-ink)"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
-              {/* Mouth: a smile when idle, opens when speaking, small "o" when listening */}
-              <path
-                className="zk-smile"
-                d="M88 136 q12 10 24 0"
-                fill="none"
-                stroke="var(--color-ink)"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
-              <ellipse
-                className="zk-mouth"
-                cx="100"
-                cy="139"
-                rx="9"
-                ry="6"
-                fill="var(--color-ink)"
-              />
-              {/* Little arms */}
-              <path
-                className="zk-arm-l"
-                d="M48 128 q-14 4 -16 18"
-                fill="none"
-                stroke="var(--color-brass)"
-                strokeWidth="8"
-                strokeLinecap="round"
-              />
-              <path
-                className="zk-arm-r"
-                d="M152 128 q14 4 16 18"
-                fill="none"
-                stroke="var(--color-brass)"
-                strokeWidth="8"
-                strokeLinecap="round"
-              />
-            </g>
+            <ZukiFigure />
           </svg>
         </div>
       </div>
@@ -336,7 +135,7 @@ const CSS = `
 .zk svg { transition: transform .15s; overflow: visible; }
 .zk-body, .zk-arm-l, .zk-arm-r { transform-box: view-box; }
 .zk-shadow { transform-box: fill-box; transform-origin: center; animation: zk-shadow 3.2s ease-in-out infinite; }
-.zk-body { transform-origin: 100px 180px; animation: zk-float 3.2s ease-in-out infinite; }
+.zk-body { transform-origin: 100px 186px; animation: zk-float 3.2s ease-in-out infinite; }
 .zk-eye { transform-box: fill-box; transform-origin: center; animation: zk-blink 4.5s infinite; }
 .zk-mouth { opacity: 0; transform-box: fill-box; transform-origin: center; }
 .zk-smile { transition: opacity .15s; }
@@ -348,7 +147,7 @@ const CSS = `
 .zk-speaking .zk-smile { opacity: 0; }
 .zk-speaking .zk-mouth { opacity: 1; animation: zk-talk .28s ease-in-out infinite alternate; }
 .zk-speaking .zk-body { animation: zk-bob .55s ease-in-out infinite alternate; }
-.zk-speaking .zk-arm-r { transform-origin: 152px 128px; animation: zk-wave 0.9s ease-in-out infinite alternate; }
+.zk-speaking .zk-arm-r { transform-origin: 123px 134px; animation: zk-wave 0.9s ease-in-out infinite alternate; }
 
 /* Listening */
 .zk-listening .zk-waves { opacity: 1; }
@@ -359,6 +158,7 @@ const CSS = `
 .zk-listening .zk-mouth { opacity: 1; transform: scale(.55, .7); }
 .zk-listening .zk-lamp { fill: var(--color-clay); animation: zk-glow 1s ease-in-out infinite; }
 .zk-listening .zk-body { animation: zk-lean 1.6s ease-in-out infinite alternate; }
+.zk-listening .zk-arm-r { transform-origin: 123px 134px; transform: rotate(-125deg); transition: transform .3s; }
 
 /* Happy and concerned */
 .zk-happy-eyes, .zk-brows, .zk-frown { opacity: 0; transition: opacity .2s; }
@@ -366,10 +166,11 @@ const CSS = `
 .zk-happy .zk-happy-eyes { opacity: 1; }
 .zk-happy .zk-smile { transform-box: fill-box; transform-origin: center; transform: scale(1.35, 1.6); }
 .zk-happy .zk-body { animation: zk-hop .5s cubic-bezier(.3,1.6,.5,1) 2; }
-.zk-happy .zk-arm-l { transform-origin: 48px 128px; animation: zk-cheer .5s ease-in-out 2 alternate; }
-.zk-happy .zk-arm-r { transform-origin: 152px 128px; animation: zk-cheer-r .5s ease-in-out 2 alternate; }
+.zk-happy .zk-arm-l { transform-origin: 77px 134px; animation: zk-cheer .5s ease-in-out 2 alternate; }
+.zk-happy .zk-arm-r { transform-origin: 123px 134px; animation: zk-cheer-r .5s ease-in-out 2 alternate; }
 .zk-happy .zk-lamp { fill: #e8c46a; }
 .zk-concerned .zk-brows, .zk-concerned .zk-frown { opacity: 1; }
+.zk-concerned .zk-brows-n { opacity: 0; }
 .zk-concerned .zk-smile { opacity: 0; }
 .zk-concerned .zk-eye { animation: none; transform: scale(.9); }
 .zk-concerned .zk-body { animation: zk-tilt 1.8s ease-in-out infinite alternate; }

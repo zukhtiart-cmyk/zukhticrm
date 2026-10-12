@@ -14,8 +14,8 @@ int main() {
     Animator a;
     Pose pose;
     for (int i = 0; i < 60; i++) pose = a.update(moods[m], 1.0f / 30, 0.6f);
-    p.gradient(hex(0x2A231D), hex(0x15120F));
-    drawZuki(p, pose, 240, 190, 1.35f, hex(0x1F1C18));
+    p.clear(hex(0x1C1814));
+    drawZuki(p, pose, 240, 200, 1.6f, hex(0x1F1C18));
     char fn[64];
     snprintf(fn, sizeof fn, "/tmp/zk_%s.ppm", names[m]);
     FILE *f = fopen(fn, "wb");

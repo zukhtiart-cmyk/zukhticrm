@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { AssistantPanel } from "./assistant-panel";
 import { primeSpeech } from "@/lib/speech-client";
+import { ZukiEyes, ZukiHeadParts } from "@/components/zuki-art";
 
 /**
  * Floating Zuki button: one place to tell the CRM anything, from any page.
@@ -111,85 +112,16 @@ export function AssistantFab({ place = "desk" }: { place?: "crm" | "desk" }) {
         >
           <span className="zk-fab-bob">
             <svg
-              viewBox="40 0 120 172"
-              width={42}
-              height={60}
+              viewBox="40 14 120 120"
+              width={50}
+              height={50}
               aria-hidden="true"
               style={{ overflow: "visible" }}
             >
-              <line
-                x1="100"
-                y1="38"
-                x2="100"
-                y2="20"
-                stroke="var(--color-ink)"
-                strokeWidth="5"
-                strokeLinecap="round"
-              />
-              <circle
-                className="zk-fab-lamp"
-                cx="100"
-                cy="15"
-                r="8"
-                fill="var(--color-brass)"
-              />
-              <path
-                d="M44 78 L100 34 L156 78 Z"
-                fill="var(--color-ink)"
-                stroke="var(--color-ink)"
-                strokeWidth="8"
-                strokeLinejoin="round"
-              />
-              <rect
-                x="48"
-                y="66"
-                width="104"
-                height="104"
-                rx="30"
-                fill="var(--color-brass)"
-              />
-              <rect
-                x="58"
-                y="76"
-                width="84"
-                height="84"
-                rx="24"
-                fill="#f6ead8"
-              />
-              <circle cx="70" cy="132" r="7" fill="#e9b7a3" opacity="0.8" />
-              <circle cx="130" cy="132" r="7" fill="#e9b7a3" opacity="0.8" />
-              <g
-                style={{
-                  transform: `translate(${eye.x}px, ${eye.y}px)`,
-                  transition: "transform .12s ease-out",
-                }}
-              >
-                <g className="zk-fab-eye">
-                  <ellipse
-                    cx="82"
-                    cy="112"
-                    rx="7.5"
-                    ry="9.5"
-                    fill="var(--color-ink)"
-                  />
-                  <ellipse
-                    cx="118"
-                    cy="112"
-                    rx="7.5"
-                    ry="9.5"
-                    fill="var(--color-ink)"
-                  />
-                  <circle cx="84.5" cy="108.5" r="2.4" fill="#fff" />
-                  <circle cx="120.5" cy="108.5" r="2.4" fill="#fff" />
-                </g>
+              <ZukiHeadParts eyes={false} />
+              <g className="zk-fab-eye">
+                <ZukiEyes dx={eye.x} dy={eye.y} />
               </g>
-              <path
-                d="M88 136 q12 10 24 0"
-                fill="none"
-                stroke="var(--color-ink)"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
             </svg>
           </span>
           {nudge && (
@@ -202,9 +134,9 @@ export function AssistantFab({ place = "desk" }: { place?: "crm" | "desk" }) {
 .zk-fab { transition: transform .2s cubic-bezier(.3,1.5,.5,1), box-shadow .2s; animation: zkfab-in .7s cubic-bezier(.3,1.6,.5,1) backwards; -webkit-tap-highlight-color: transparent; }
 .zk-fab:hover { transform: translateY(-3px) scale(1.06); box-shadow: 0 18px 30px -12px rgb(154 113 64 / .6); }
 .zk-fab:active { transform: scale(.92); }
-.zk-fab-bob { display: block; margin-top: 4px; animation: zkfab 3s ease-in-out infinite; }
+.zk-fab-bob { display: block; animation: zkfab 3s ease-in-out infinite; }
 .zk-fab-eye { transform-box: fill-box; transform-origin: center; animation: zkfab-blink 4.2s infinite; }
-.zk-fab:hover .zk-fab-lamp { fill: #e8c46a; }
+.zk-fab:hover .zk-lamp { fill: #e8c46a; }
 .zk-nudge { animation: zkfab-pop .45s cubic-bezier(.3,1.5,.5,1) both; }
 @keyframes zkfab { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
 @keyframes zkfab-blink { 0%,93%,100% { transform: scaleY(1) } 96% { transform: scaleY(.1) } }

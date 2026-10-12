@@ -1,4 +1,4 @@
-// Zuki, the brass-house character, drawn in 2D for the desk device.
+// Zuki, the young-designer character, drawn in 2D for the desk device.
 // The Animator turns "mood + time + voice level" into a pose; drawZuki() paints that pose.
 #pragma once
 #include <stdint.h>

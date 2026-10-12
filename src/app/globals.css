@@ -276,6 +276,14 @@ label:focus-within > .label {
   50% { box-shadow: 0 0 0 4px rgb(154 113 64 / 0); }
 }
 
+/* Zuki's alternate expressions stay hidden unless a mood shows them (see components/zuki.tsx). */
+.zk-happy-eyes,
+.zk-brows,
+.zk-frown,
+.zk-mouth {
+  opacity: 0;
+}
+
 /* ---------- Motion ---------- */
 
 /* One entrance per screen: the page settles in, its blocks follow a beat behind. */

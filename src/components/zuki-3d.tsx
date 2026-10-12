@@ -8,13 +8,10 @@ import { mouthLevel } from "@/lib/speech-client";
 import type { ZukiState } from "./zuki";
 
 /**
- * Zuki in 3D: a little brass house with a lamp on its roof.
+ * Zuki in 3D: a cheerful young interior designer in an olive apron.
  * It looks at your finger or mouse, blinks, bobs, talks with its mouth, and reacts to its state.
  * Tap it and it boings; drag sideways and it spins, then settles back.
  */
-const BRASS = 0xa87b45;
-const CREAM = 0xf1dfc4;
-const INK = 0x2b241e;
 const CLAY = 0xb4553a;
 const OLIVE = 0x6f8a5f;
 const GOLD = 0xf0c868;
@@ -67,8 +64,8 @@ export default function Zuki3D({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(W, H);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMapping = THREE.NeutralToneMapping;
+    renderer.toneMappingExposure = 0.92;
     renderer.domElement.style.display = "block";
     renderer.domElement.style.touchAction = "pan-y";
     el.appendChild(renderer.domElement);
@@ -77,12 +74,13 @@ export default function Zuki3D({
     const pmrem = new THREE.PMREMGenerator(renderer);
     const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environment = envTex;
+    scene.environmentIntensity = 0.45;
 
     const camera = new THREE.PerspectiveCamera(28, W / H, 0.1, 50);
     camera.position.set(0, 0.4, 6.1);
     camera.lookAt(0, 0.38, 0);
 
-    scene.add(new THREE.HemisphereLight(0xfff6e8, 0x6b5a45, 0.9));
+    scene.add(new THREE.HemisphereLight(0xfff6e8, 0x6b5a45, 0.75));
     const key = new THREE.DirectionalLight(0xffffff, 1.6);
     key.position.set(2.5, 4, 5);
     scene.add(key);
@@ -90,50 +88,45 @@ export default function Zuki3D({
     rim.position.set(-3, 2, -3);
     scene.add(rim);
 
+    const std = (
+      color: number,
+      roughness = 0.6,
+      extra: THREE.MeshStandardMaterialParameters = {},
+    ) =>
+      new THREE.MeshStandardMaterial({
+        color,
+        roughness,
+        metalness: 0,
+        ...extra,
+      });
     const mat = {
-      brass: new THREE.MeshStandardMaterial({
-        color: BRASS,
-        metalness: 0.55,
-        roughness: 0.32,
-      }),
-      cream: new THREE.MeshStandardMaterial({
-        color: CREAM,
-        metalness: 0,
-        roughness: 0.75,
-      }),
-      ink: new THREE.MeshStandardMaterial({
-        color: INK,
-        metalness: 0,
-        roughness: 0.62,
-      }),
-      roof: new THREE.MeshStandardMaterial({
-        color: 0x241d18,
-        metalness: 0,
-        roughness: 0.55,
-        flatShading: true,
-        envMapIntensity: 0.35,
-      }),
-      eye: new THREE.MeshStandardMaterial({
-        color: 0x1b1714,
-        metalness: 0.2,
-        roughness: 0.15,
-      }),
+      skin: std(0xcf9468, 0.62),
+      skinShade: std(0xb97c52, 0.7),
+      hair: std(0x2a1c15, 0.45),
+      shirt: std(0x58779a, 0.85),
+      apron: std(0x56704f, 0.9),
+      apronDark: std(0x475e41, 0.9),
+      pants: std(0x3a2c24, 0.8),
+      shoe: std(0x6b4a2f, 0.55),
+      pencil: std(0xd9a441, 0.5),
+      eraser: std(0xe59a9a, 0.7),
+      wood: std(0xf1d8b0, 0.7),
+      tape: std(0xe2b84a, 0.4, { metalness: 0.2 }),
+      sclera: std(0xfffaf2, 0.3),
+      iris: std(0x5a3622, 0.25),
+      eye: std(0x1b1714, 0.12),
       white: new THREE.MeshBasicMaterial({ color: 0xffffff }),
       cheek: new THREE.MeshBasicMaterial({
-        color: 0xe9a58f,
+        color: 0xe58f7a,
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.45,
         depthWrite: false,
       }),
-      mouth: new THREE.MeshStandardMaterial({
-        color: 0x4a1f1a,
-        roughness: 0.6,
-      }),
-      lamp: new THREE.MeshStandardMaterial({
-        color: GOLD,
+      mouth: std(0x5a2620, 0.6),
+      lamp: std(GOLD, 0.35, {
+        metalness: 0.4,
         emissive: new THREE.Color(GOLD),
-        emissiveIntensity: 0.6,
-        roughness: 0.3,
+        emissiveIntensity: 0.4,
       }),
       ring: new THREE.MeshBasicMaterial({
         color: OLIVE,
@@ -149,140 +142,284 @@ export default function Zuki3D({
     };
     const geos: THREE.BufferGeometry[] = [];
     const g = <T extends THREE.BufferGeometry>(x: T) => (geos.push(x), x);
+    const mesh = (
+      geo: THREE.BufferGeometry,
+      m: THREE.Material,
+      x = 0,
+      y = 0,
+      z = 0,
+    ) => {
+      const o = new THREE.Mesh(geo, m);
+      o.position.set(x, y, z);
+      return o;
+    };
 
-    // ---- Build Zuki ----
+    // ---- Build Zuki: a young designer in an olive apron ----
     const root = new THREE.Group(); // bob, squash, spin
     scene.add(root);
-    const body = new THREE.Group(); // turns to look at you
-    root.add(body);
+    const torso = new THREE.Group();
+    root.add(torso);
 
-    const house = new THREE.Mesh(
-      g(new RoundedBoxGeometry(1.3, 1.22, 0.92, 6, 0.3)),
-      mat.brass,
+    // Legs and shoes.
+    const legGeo = g(new THREE.CapsuleGeometry(0.1, 0.2, 6, 12));
+    torso.add(
+      mesh(legGeo, mat.pants, -0.15, -0.52, 0),
+      mesh(legGeo, mat.pants, 0.15, -0.52, 0),
     );
-    body.add(house);
-    const face = new THREE.Mesh(
-      g(new RoundedBoxGeometry(1.04, 0.98, 0.1, 5, 0.24)),
-      mat.cream,
+    const shoeGeo = g(new RoundedBoxGeometry(0.24, 0.13, 0.36, 4, 0.06));
+    torso.add(
+      mesh(shoeGeo, mat.shoe, -0.16, -0.75, 0.06),
+      mesh(shoeGeo, mat.shoe, 0.16, -0.75, 0.06),
     );
-    face.position.set(0, -0.02, 0.44);
-    body.add(face);
 
-    const roof = new THREE.Mesh(
-      g(new THREE.ConeGeometry(0.98, 0.78, 4, 1)),
-      mat.roof,
+    // Shirt body, apron with straps, pocket with a measuring tape.
+    const chest = mesh(
+      g(new THREE.CapsuleGeometry(0.36, 0.28, 8, 20)),
+      mat.shirt,
+      0,
+      -0.06,
+      0,
     );
-    roof.rotation.y = Math.PI / 4;
-    roof.scale.set(1, 1, 0.8);
-    roof.position.y = 0.98;
-    body.add(roof);
-    const stem = new THREE.Mesh(
-      g(new THREE.CylinderGeometry(0.025, 0.025, 0.3, 10)),
-      mat.ink,
+    chest.scale.set(1, 1, 0.82);
+    torso.add(chest);
+    const apron = mesh(
+      g(new RoundedBoxGeometry(0.6, 0.5, 0.06, 4, 0.05)),
+      mat.apron,
+      0,
+      -0.16,
+      0.27,
     );
-    stem.position.y = 1.45;
-    body.add(stem);
-    const lamp = new THREE.Mesh(
-      g(new THREE.SphereGeometry(0.1, 24, 16)),
-      mat.lamp,
+    apron.rotation.x = -0.08;
+    torso.add(apron);
+    const strapGeo = g(new RoundedBoxGeometry(0.06, 0.3, 0.04, 2, 0.015));
+    const strapL = mesh(strapGeo, mat.apron, -0.17, 0.18, 0.25);
+    const strapR = mesh(strapGeo, mat.apron, 0.17, 0.18, 0.25);
+    strapL.rotation.set(-0.35, 0, -0.15);
+    strapR.rotation.set(-0.35, 0, 0.15);
+    torso.add(strapL, strapR);
+    torso.add(
+      mesh(
+        g(new RoundedBoxGeometry(0.24, 0.16, 0.04, 2, 0.02)),
+        mat.apronDark,
+        0,
+        -0.24,
+        0.31,
+      ),
     );
-    lamp.position.y = 1.64;
-    body.add(lamp);
-    const lampLight = new THREE.PointLight(GOLD, 0.6, 3);
-    lampLight.position.y = 1.7;
-    body.add(lampLight);
-
-    const faceZ = 0.5;
-    const eyeGeo = g(new THREE.SphereGeometry(0.085, 24, 16));
-    const glintGeo = g(new THREE.SphereGeometry(0.026, 12, 8));
-    const makeEye = (x: number) => {
-      const grp = new THREE.Group();
-      grp.position.set(x, 0.1, faceZ);
-      const ball = new THREE.Mesh(eyeGeo, mat.eye);
-      ball.scale.set(1, 1.28, 0.55);
-      const glint = new THREE.Mesh(glintGeo, mat.white);
-      glint.position.set(0.028, 0.05, 0.045);
-      grp.add(ball, glint);
-      body.add(grp);
-      return grp;
-    };
-    const eyeL = makeEye(-0.23);
-    const eyeR = makeEye(0.23);
-
-    // Happy eyes: little arcs (^ ^).
-    const arcGeo = g(new THREE.TorusGeometry(0.075, 0.02, 8, 20, Math.PI));
-    const happyL = new THREE.Mesh(arcGeo, mat.eye);
-    const happyR = new THREE.Mesh(arcGeo, mat.eye);
-    happyL.position.set(-0.23, 0.08, faceZ);
-    happyR.position.set(0.23, 0.08, faceZ);
-    body.add(happyL, happyR);
-
-    // Worried brows.
-    const browGeo = g(new THREE.CapsuleGeometry(0.018, 0.12, 4, 8));
-    const browL = new THREE.Mesh(browGeo, mat.eye);
-    const browR = new THREE.Mesh(browGeo, mat.eye);
-    browL.position.set(-0.23, 0.3, faceZ);
-    browR.position.set(0.23, 0.3, faceZ);
-    browL.rotation.z = Math.PI / 2 + 0.35;
-    browR.rotation.z = Math.PI / 2 - 0.35;
-    body.add(browL, browR);
-
-    // Mouth: a smile, an open talking mouth, and a frown.
-    const smile = new THREE.Mesh(
-      g(new THREE.TorusGeometry(0.12, 0.022, 8, 24, Math.PI)),
-      mat.eye,
+    const tape = mesh(
+      g(new THREE.CylinderGeometry(0.075, 0.075, 0.05, 24)),
+      mat.tape,
+      0.07,
+      -0.2,
+      0.34,
     );
-    smile.rotation.z = Math.PI;
-    smile.position.set(0, -0.12, faceZ);
-    body.add(smile);
-    const open = new THREE.Mesh(
-      g(new THREE.SphereGeometry(0.1, 24, 16)),
-      mat.mouth,
-    );
-    open.position.set(0, -0.2, faceZ - 0.01);
-    body.add(open);
-    const frown = new THREE.Mesh(
-      g(new THREE.TorusGeometry(0.09, 0.02, 8, 20, Math.PI)),
-      mat.eye,
-    );
-    frown.position.set(0, -0.26, faceZ);
-    body.add(frown);
+    tape.rotation.x = Math.PI / 2;
+    torso.add(tape);
+    torso.add(
+      mesh(
+        g(new THREE.CylinderGeometry(0.06, 0.07, 0.16, 16)),
+        mat.skinShade,
+        0,
+        0.3,
+        0,
+      ),
+    ); // neck
 
-    const cheekGeo = g(new THREE.CircleGeometry(0.075, 24));
-    const cheekL = new THREE.Mesh(cheekGeo, mat.cheek);
-    const cheekR = new THREE.Mesh(cheekGeo, mat.cheek);
-    cheekL.position.set(-0.36, -0.1, faceZ + 0.002);
-    cheekR.position.set(0.36, -0.1, faceZ + 0.002);
-    body.add(cheekL, cheekR);
-
-    // Arms on shoulder pivots, and two little feet.
-    const armGeo = g(new THREE.CapsuleGeometry(0.075, 0.34, 6, 12));
+    // Arms on shoulder pivots: sleeve and hand.
+    const sleeveGeo = g(new THREE.CapsuleGeometry(0.095, 0.22, 6, 12));
+    const handGeo = g(new THREE.SphereGeometry(0.1, 20, 14));
     const makeArm = (side: 1 | -1) => {
       const pivot = new THREE.Group();
-      pivot.position.set(0.66 * side, -0.05, 0.05);
-      const arm = new THREE.Mesh(armGeo, mat.brass);
-      arm.position.set(0.1 * side, -0.2, 0);
-      arm.rotation.z = 0.45 * side;
-      pivot.add(arm);
+      pivot.position.set(0.4 * side, 0.16, 0);
+      const sleeve = mesh(sleeveGeo, mat.shirt, 0.07 * side, -0.2, 0);
+      sleeve.rotation.z = 0.3 * side;
+      const hand = mesh(handGeo, mat.skin, 0.14 * side, -0.44, 0.02);
+      pivot.add(sleeve, hand);
       root.add(pivot);
       return pivot;
     };
     const armL = makeArm(-1);
     const armR = makeArm(1);
-    const footGeo = g(new RoundedBoxGeometry(0.3, 0.14, 0.34, 4, 0.06));
-    const footL = new THREE.Mesh(footGeo, mat.ink);
-    const footR = new THREE.Mesh(footGeo, mat.ink);
-    footL.position.set(-0.3, -0.68, 0.05);
-    footR.position.set(0.3, -0.68, 0.05);
-    root.add(footL, footR);
+
+    // Head (turns to look at you).
+    const body = new THREE.Group();
+    body.position.y = 0.8;
+    root.add(body);
+    const skull = mesh(g(new THREE.SphereGeometry(0.62, 40, 30)), mat.skin);
+    skull.scale.set(1, 0.95, 0.92);
+    body.add(skull);
+    const earGeo = g(new THREE.SphereGeometry(0.13, 20, 14));
+    for (const sx of [-1, 1]) {
+      const ear = mesh(earGeo, mat.skin, 0.6 * sx, 0, 0);
+      ear.scale.set(0.6, 1, 0.7);
+      body.add(ear);
+    }
+    // Hair: a cap with a wavy fringe, side locks, and a top-knot with a brass tie (it glows with Zuki's mood).
+    const cap = mesh(
+      g(
+        new THREE.SphereGeometry(
+          0.655,
+          40,
+          24,
+          0,
+          Math.PI * 2,
+          0,
+          Math.PI * 0.485,
+        ),
+      ),
+      mat.hair,
+      0,
+      0.02,
+      -0.02,
+    );
+    cap.rotation.x = -0.28;
+    cap.scale.set(1.02, 1, 0.98);
+    body.add(cap);
+    const tuftGeo = g(new THREE.SphereGeometry(0.16, 16, 12));
+    for (const [x, y, z, sx] of [
+      [-0.3, 0.42, 0.42, 1.2],
+      [0.05, 0.47, 0.45, 1.3],
+      [0.36, 0.38, 0.4, 1.0],
+      [-0.56, 0.05, 0.12, 0.9],
+      [0.56, 0.05, 0.12, 0.9],
+    ] as const) {
+      const t = mesh(tuftGeo, mat.hair, x, y, z);
+      t.scale.set(sx, 0.6, 0.55);
+      body.add(t);
+    }
+    body.add(
+      mesh(
+        g(new THREE.SphereGeometry(0.21, 24, 18)),
+        mat.hair,
+        0.04,
+        0.68,
+        -0.08,
+      ),
+    );
+    const tie = mesh(
+      g(new THREE.TorusGeometry(0.13, 0.045, 10, 24)),
+      mat.lamp,
+      0.03,
+      0.55,
+      -0.06,
+    );
+    tie.rotation.x = Math.PI / 2 - 0.2;
+    body.add(tie);
+    // Pencil tucked behind the right ear.
+    const pencil = new THREE.Group();
+    pencil.add(
+      mesh(g(new THREE.CylinderGeometry(0.035, 0.035, 0.42, 6)), mat.pencil),
+    );
+    pencil.add(
+      mesh(
+        g(new THREE.CylinderGeometry(0.036, 0.036, 0.06, 6)),
+        mat.eraser,
+        0,
+        0.24,
+        0,
+      ),
+    );
+    const tip = mesh(
+      g(new THREE.ConeGeometry(0.035, 0.09, 6)),
+      mat.wood,
+      0,
+      -0.255,
+      0,
+    );
+    tip.rotation.x = Math.PI;
+    pencil.add(tip);
+    pencil.position.set(0.62, 0.22, 0.05);
+    pencil.rotation.set(0.2, 0, -0.55);
+    body.add(pencil);
+
+    // Face.
+    const faceZ = 0.53;
+    const scleraGeo = g(new THREE.SphereGeometry(0.135, 24, 18));
+    const irisGeo = g(new THREE.SphereGeometry(0.085, 20, 14));
+    const pupilGeo = g(new THREE.SphereGeometry(0.046, 16, 12));
+    const glintGeo = g(new THREE.SphereGeometry(0.024, 12, 8));
+    const irises: THREE.Group[] = [];
+    const makeEye = (x: number) => {
+      const grp = new THREE.Group();
+      grp.position.set(x, 0.02, faceZ);
+      const sclera = mesh(scleraGeo, mat.sclera);
+      sclera.scale.set(1, 1.15, 0.45);
+      const iris = new THREE.Group();
+      const ir = mesh(irisGeo, mat.iris, 0, -0.01, 0.045);
+      ir.scale.set(1, 1, 0.35);
+      const pu = mesh(pupilGeo, mat.eye, 0, -0.01, 0.07);
+      pu.scale.set(1, 1, 0.35);
+      const gl = mesh(glintGeo, mat.white, 0.03, 0.035, 0.085);
+      iris.add(ir, pu, gl);
+      grp.add(sclera, iris);
+      irises.push(iris);
+      body.add(grp);
+      return grp;
+    };
+    const eyeL = makeEye(-0.21);
+    const eyeR = makeEye(0.21);
+
+    // Happy eyes: little arcs (^ ^).
+    const arcGeo = g(new THREE.TorusGeometry(0.085, 0.022, 8, 20, Math.PI));
+    const happyL = mesh(arcGeo, mat.eye, -0.21, 0.0, faceZ + 0.05);
+    const happyR = mesh(arcGeo, mat.eye, 0.21, 0.0, faceZ + 0.05);
+    body.add(happyL, happyR);
+
+    // Brows: relaxed, or raised in the middle when worried.
+    const browGeo = g(new THREE.CapsuleGeometry(0.022, 0.13, 4, 8));
+    const browL = mesh(browGeo, mat.hair, -0.21, 0.19, faceZ + 0.05);
+    const browR = mesh(browGeo, mat.hair, 0.21, 0.19, faceZ + 0.05);
+    body.add(browL, browR);
+
+    // Nose, mouth (smile / talking / frown) and cheeks.
+    body.add(
+      mesh(
+        g(new THREE.SphereGeometry(0.05, 16, 12)),
+        mat.skinShade,
+        0,
+        -0.1,
+        faceZ + 0.06,
+      ),
+    );
+    const smile = mesh(
+      g(new THREE.TorusGeometry(0.11, 0.022, 8, 24, Math.PI)),
+      mat.mouth,
+      0,
+      -0.2,
+      faceZ + 0.02,
+    );
+    smile.rotation.z = Math.PI;
+    body.add(smile);
+    const open = mesh(
+      g(new THREE.SphereGeometry(0.09, 24, 16)),
+      mat.mouth,
+      0,
+      -0.27,
+      faceZ - 0.01,
+    );
+    body.add(open);
+    const frown = mesh(
+      g(new THREE.TorusGeometry(0.085, 0.02, 8, 20, Math.PI)),
+      mat.mouth,
+      0,
+      -0.32,
+      faceZ + 0.01,
+    );
+    body.add(frown);
+    const cheekGeo = g(new THREE.CircleGeometry(0.075, 24));
+    const cheekL = mesh(cheekGeo, mat.cheek, -0.34, -0.14, faceZ - 0.02);
+    const cheekR = mesh(cheekGeo, mat.cheek, 0.34, -0.14, faceZ - 0.02);
+    cheekL.rotation.y = -0.45;
+    cheekR.rotation.y = 0.45;
+    body.add(cheekL, cheekR);
 
     // Listening rings and thinking dots.
     const rings = [0, 1, 2].map(() => {
       const r = new THREE.Mesh(
-        g(new THREE.TorusGeometry(0.95, 0.02, 8, 64)),
+        g(new THREE.TorusGeometry(0.85, 0.02, 8, 64)),
         mat.ring.clone(),
       );
-      r.position.set(0, 0.15, -0.1);
+      r.position.set(0, 0.8, -0.25);
       scene.add(r);
       return r;
     });
@@ -304,7 +441,7 @@ export default function Zuki3D({
     sctx.fillRect(0, 0, 128, 128);
     const shadowTex = new THREE.CanvasTexture(shadowCanvas);
     const shadow = new THREE.Mesh(
-      g(new THREE.PlaneGeometry(2.2, 0.7)),
+      g(new THREE.PlaneGeometry(1.8, 0.6)),
       new THREE.MeshBasicMaterial({
         map: shadowTex,
         transparent: true,
@@ -312,7 +449,7 @@ export default function Zuki3D({
       }),
     );
     shadow.rotation.x = -Math.PI / 2;
-    shadow.position.y = -0.78;
+    shadow.position.y = -0.83;
     scene.add(shadow);
 
     // ---- Interaction ----
@@ -446,8 +583,9 @@ export default function Zuki3D({
           : st === "concerned"
             ? -0.08 + Math.sin(t * 1.5) * 0.02
             : 0;
-      body.rotation.y = look.x * 0.7;
-      body.rotation.x = look.y * 0.28;
+      body.rotation.y = look.x * 0.6;
+      body.rotation.x = look.y * 0.3;
+      torso.rotation.y = look.x * 0.15;
       shadow.scale.setScalar(1 - bob * 0.8);
 
       // Eyes: follow, blink, widen when listening.
@@ -458,17 +596,20 @@ export default function Zuki3D({
       const blink = now < blinkUntil ? 0.1 : 1;
       const wide = st === "listening" ? 1.15 : st === "concerned" ? 0.92 : 1;
       const happy = st === "happy";
-      for (const [eye, x] of [
-        [eyeL, -0.23],
-        [eyeR, 0.23],
-      ] as const) {
+      for (const eye of [eyeL, eyeR]) {
         eye.visible = !happy;
-        eye.position.x = x + look.x * 0.05;
-        eye.position.y = 0.1 - look.y * 0.04;
         eye.scale.set(wide, wide * blink, 1);
       }
+      // Irises follow where Zuki is looking.
+      for (const iris of irises)
+        iris.position.set(look.x * 0.045, -look.y * 0.04, 0);
       happyL.visible = happyR.visible = happy;
-      browL.visible = browR.visible = st === "concerned";
+      // Brows lift in the middle when worried, rise a little when listening.
+      const worried = st === "concerned";
+      browL.rotation.z = Math.PI / 2 + (worried ? 0.4 : -0.08);
+      browR.rotation.z = Math.PI / 2 - (worried ? 0.4 : -0.08);
+      browL.position.y = browR.position.y =
+        0.19 + (st === "listening" ? 0.03 : worried ? 0.02 : 0);
 
       // Mouth: talk with the voice, smile otherwise, frown when worried.
       const m = st === "speaking" ? mouthLevel(now) : 0;
@@ -478,7 +619,7 @@ export default function Zuki3D({
       smile.visible = !open.visible && st !== "concerned";
       smile.scale.setScalar(happy ? 1.35 : 1);
       frown.visible = st === "concerned";
-      cheekL.material.opacity = happy ? 0.85 : 0.55;
+      mat.cheek.opacity = happy ? 0.75 : 0.45;
 
       // Arms.
       const wave = st === "speaking" ? Math.sin(t * 7) * 0.35 : 0;
@@ -493,7 +634,7 @@ export default function Zuki3D({
         cheer
           ? cheer
           : st === "listening"
-            ? 1.9
+            ? 2.5
             : st === "concerned"
               ? -0.35
               : 0.2 + wave,
@@ -519,8 +660,6 @@ export default function Zuki3D({
             ? 1.2
             : 0.55;
       mat.lamp.emissiveIntensity = pulse;
-      lampLight.color.copy(lampColor);
-      lampLight.intensity = pulse * 0.8;
 
       // Listening rings spread out; thinking dots circle above.
       rings.forEach((r, i) => {
@@ -535,7 +674,7 @@ export default function Zuki3D({
         const a = t * 3 + (i * Math.PI * 2) / 3;
         d.position.set(
           Math.cos(a) * 0.42,
-          1.78 + Math.sin(t * 4 + i) * 0.05,
+          1.72 + Math.sin(t * 4 + i) * 0.05,
           Math.sin(a) * 0.35,
         );
         (d.material as THREE.MeshBasicMaterial).opacity =

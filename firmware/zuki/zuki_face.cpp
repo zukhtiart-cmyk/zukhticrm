@@ -60,7 +60,7 @@ Pose Animator::update(Mood mood, float dt, float voice) {
   // Arms.
   float tl = 0.15f + sinf(t_ * 1.6f) * 0.05f, tr = 0.15f;
   if (mood == Mood::Speaking) tr = 0.35f + sinf(t_ * 7) * 0.3f;
-  if (mood == Mood::Listening) tr = 1.9f;
+  if (mood == Mood::Listening) tr = 2.3f;  // hand to the ear
   if (mood == Mood::Concerned) { tl = -0.25f; tr = -0.25f; }
   if (mood == Mood::Happy) { tl = 2.2f + sinf(t_ * 12) * 0.25f; tr = 2.2f + sinf(t_ * 12 + 1) * 0.25f; }
   armL_ = lerp(armL_, tl, 1 - powf(0.001f, dt));
@@ -74,124 +74,190 @@ Pose Animator::update(Mood mood, float dt, float voice) {
   return p;
 }
 
-// Brand colours.
-static const uint32_t BRASS = 0xB0844F, BRASS_DARK = 0x8A6436, CREAM = 0xF6EAD8, INK = 0x1F1C18, ROOF = 0x0F0D0B,
-                      CHEEK = 0xE9A58F, CLAY = 0xC4664A, OLIVE = 0x8FAE7F, GOLD = 0xF0C868, MOUTH = 0x5A2620;
+// Zuki's colours: a young designer in a denim shirt and an olive apron.
+static const uint32_t SKIN = 0xCF9468, SKIN_SHADE = 0xB97C52, HAIR = 0x2A1C15, SHIRT = 0x58779A, APRON = 0x56704F,
+                      APRON_DARK = 0x475E41, PANTS = 0x3A2C24, SHOE = 0x6B4A2F, PENCIL = 0xD9A441, ERASER = 0xE59A9A,
+                      WOOD = 0xF1D8B0, TAPE = 0xE2B84A, SCLERA = 0xFFFAF2, IRIS = 0x5A3622, PUPIL = 0x1F1712, MOUTH = 0x5A2620,
+                      CHEEK = 0xE58F7A, BRASS = 0xB0844F, CLAY = 0xC4664A, OLIVE = 0x8FAE7F, GOLD = 0xF0C868, CREAM = 0xF6EAD8;
 
 void drawZuki(Painter &p, const Pose &pose, float cx, float cy, float s, uint16_t bg) {
   (void)bg;
-  // Squash and stretch around the feet.
   float sx = s * (1 + pose.squash * 0.12f), sy = s * (1 - pose.squash * 0.12f);
   float ox = cx, oy = cy + pose.bob;
   float ct = cosf(pose.tilt), st = sinf(pose.tilt);
-  // Design units (0..200 box, centre 100,118) → screen, with lean.
+  // Design units (the same 200×200 drawing as the app, centre 100,118) → screen, with lean.
   auto X = [&](float x, float y) { float dx = (x - 100) * sx, dy = (y - 118) * sy; return ox + dx * ct - dy * st; };
   auto Y = [&](float x, float y) { float dx = (x - 100) * sx, dy = (y - 118) * sy; return oy + dx * st + dy * ct; };
   float S = (sx + sy) / 2;
+  auto ellipse = [&](float x, float y, float rx, float ry, uint32_t c, uint8_t a = 255) { p.fillEllipse(X(x, y), Y(x, y), rx * S, ry * S, hex(c), a); };
+  auto circle = [&](float x, float y, float r, uint32_t c, uint8_t a = 255) { ellipse(x, y, r, r, c, a); };
+  auto rrect = [&](float x, float y, float w, float h, float r, uint32_t c) { p.fillRoundRect(X(x, y), Y(x, y), w * S, h * S, r * S, hex(c)); };
+  auto line = [&](float x0, float y0, float x1, float y1, float w, uint32_t c) { p.thickLine(X(x0, y0), Y(x0, y0), X(x1, y1), Y(x1, y1), w * S, hex(c)); };
+  auto quad = [&](float x0, float y0, float qx, float qy, float x1, float y1, float w, uint32_t c) {
+    p.thickQuad(X(x0, y0), Y(x0, y0), X(qx, qy), Y(qx, qy), X(x1, y1), Y(x1, y1), w * S, hex(c));
+  };
+  // A closed shape made of cubic curves: pts = start, then (c1, c2, end) triples.
+  auto cubicShape = [&](const float *pts, int segs, uint32_t c) {
+    float xs[64], ys[64];
+    int n = 0;
+    float px = pts[0], py = pts[1];
+    for (int k = 0; k < segs; k++) {
+      const float *q = pts + 2 + k * 6;
+      for (int i = 1; i <= 10 && n < 64; i++) {
+        float t = i / 10.0f, u = 1 - t;
+        float x = u * u * u * px + 3 * u * u * t * q[0] + 3 * u * t * t * q[2] + t * t * t * q[4];
+        float y = u * u * u * py + 3 * u * u * t * q[1] + 3 * u * t * t * q[3] + t * t * t * q[5];
+        xs[n] = X(x, y);
+        ys[n] = Y(x, y);
+        n++;
+      }
+      px = q[4];
+      py = q[5];
+    }
+    p.fillPolygon(xs, ys, n, hex(c));
+  };
+  // An arm: sleeve, forearm and hand, swung up from the shoulder by `ang` (0 = hanging).
+  auto arm = [&](float side, float ang) {
+    float shx = 100 + side * 23, shy = 134;
+    float th = -(ang - 0.15f) * side;  // raise outwards
+    float c = cosf(th), sn = sinf(th);
+    auto rx = [&](float x, float y) { return shx + (x - shx) * c - (y - shy) * sn; };
+    auto ry = [&](float x, float y) { return shy + (x - shx) * sn + (y - shy) * c; };
+    float ex = 100 + side * 34, ey = 152, wx = 100 + side * 37, wy = 163, hx = 100 + side * 37.5f, hy = 165;
+    line(shx, shy, rx(ex, ey), ry(ex, ey), 13, SHIRT);
+    line(rx(ex, ey), ry(ex, ey), rx(wx, wy), ry(wx, wy), 9, SKIN);
+    circle(rx(hx, hy), ry(hx, hy), 6, SKIN);
+  };
 
   // Floor shadow (doesn't bob).
-  float shadowK = 1 - pose.bob * 0.01f;
-  p.fillEllipse(cx, cy + 82 * s, 46 * s * shadowK, 7 * s, hex(0x000000), 90);
+  p.fillEllipse(cx, cy + 74 * s, 34 * s * (1 - pose.bob * 0.01f), 5 * s, hex(0x000000), 90);
 
-  // Listening rings.
-  if (pose.mood == Mood::Listening) {
+  // Listening rings around the head.
+  if (pose.mood == Mood::Listening)
     for (int i = 0; i < 3; i++) {
       float ph = fmodf(pose.ringPhase + i / 3.0f, 1.0f);
-      p.thickArc(ox, oy, (70 + ph * 40) * s, 3 * s, 0, 2 * PI_F, hex(OLIVE), (uint8_t)(170 * (1 - ph)));
+      p.thickArc(X(100, 86), Y(100, 86), (56 + ph * 34) * S, 3 * S, 0, 2 * PI_F, hex(OLIVE), (uint8_t)(170 * (1 - ph)));
     }
-  }
 
-  // Arms (behind the body): from the shoulders, swinging up with the angle.
-  auto arm = [&](float side, float ang) {
-    float sx0 = 100 + side * 50, sy0 = 128;
-    float len = 30;
-    float ex = sx0 + side * cosf(-ang + PI_F * 0.35f) * len;
-    float ey = sy0 + sinf(-ang + PI_F * 0.35f) * len * 1.0f;
-    // ang 0 → hanging down-out; ang ~2 → raised.
-    ex = sx0 + side * (sinf(ang * 0.9f + 0.6f) * len);
-    ey = sy0 + cosf(ang * 0.9f + 0.6f) * len;
-    p.thickLine(X(sx0, sy0), Y(sx0, sy0), X(ex, ey), Y(ex, ey), 9 * S, hex(BRASS));
-  };
+  // Legs and shoes.
+  rrect(86, 168, 11, 17, 4, PANTS);
+  rrect(103, 168, 11, 17, 4, PANTS);
+  ellipse(90, 186, 10, 5, SHOE);
+  ellipse(110, 186, 10, 5, SHOE);
+
+  // Arms behind the body.
   arm(-1, pose.armL);
   arm(1, pose.armR);
 
-  // Feet.
-  p.fillRoundRect(X(70, 166) - 13 * S, Y(70, 166), 26 * S, 12 * S, 5 * S, hex(INK));
-  p.fillRoundRect(X(130, 166) - 13 * S, Y(130, 166), 26 * S, 12 * S, 5 * S, hex(INK));
+  // Neck, shirt, apron with straps, pocket and measuring tape.
+  rrect(93, 118, 14, 10, 3, SKIN_SHADE);
+  rrect(72, 124, 56, 50, 20, SHIRT);
+  line(86, 125, 81, 138, 4, APRON);
+  line(114, 125, 119, 138, 4, APRON);
+  rrect(79, 138, 42, 36, 6, APRON);
+  rrect(91, 152, 18, 13, 3, APRON_DARK);
+  circle(104, 153, 5.5f, TAPE);
+  circle(104, 153, 1.8f, 0x7A5A1E);
 
-  // Body (house) and face plate — drawn as rounded rects (lean is small, so they stay upright).
-  p.fillRoundRect(X(48, 66) - 1, Y(48, 66), 104 * S, 104 * S, 30 * S, hex(BRASS));
-  p.fillRoundRect(X(48, 66) + 2 * S, Y(48, 66) + 70 * S, 100 * S, 32 * S, 26 * S, hex(BRASS_DARK), 60);  // a little shade at the bottom
-  p.fillRoundRect(X(58, 76), Y(58, 76), 84 * S, 84 * S, 24 * S, hex(CREAM));
+  // Ears.
+  circle(55, 90, 9, SKIN);
+  ellipse(55, 90, 4, 5, SKIN_SHADE);
+  circle(145, 90, 9, SKIN);
+  ellipse(145, 90, 4, 5, SKIN_SHADE);
 
-  // Roof with a brass rim so it reads on a dark screen.
-  float rx[3] = {X(40, 80), X(100, 30), X(160, 80)}, ry[3] = {Y(40, 80), Y(100, 30), Y(160, 80)};
-  p.fillPolygon(rx, ry, 3, hex(BRASS_DARK));
-  float rx2[3] = {X(47, 76), X(100, 36), X(153, 76)}, ry2[3] = {Y(47, 76), Y(100, 36), Y(153, 76)};
-  p.fillPolygon(rx2, ry2, 3, hex(ROOF));
+  // Pencil behind the right ear (rotated −28° about 148,70).
+  {
+    float a = -28 * PI_F / 180, c = cosf(a), sn = sinf(a);
+    auto rx = [&](float x, float y) { return 148 + (x - 148) * c - (y - 70) * sn; };
+    auto ry = [&](float x, float y) { return 70 + (x - 148) * sn + (y - 70) * c; };
+    auto quadPoly = [&](float x0, float y0, float x1, float y1, uint32_t col) {
+      float xs[4] = {X(rx(x0, y0), ry(x0, y0)), X(rx(x1, y0), ry(x1, y0)), X(rx(x1, y1), ry(x1, y1)), X(rx(x0, y1), ry(x0, y1))};
+      float ys[4] = {Y(rx(x0, y0), ry(x0, y0)), Y(rx(x1, y0), ry(x1, y0)), Y(rx(x1, y1), ry(x1, y1)), Y(rx(x0, y1), ry(x0, y1))};
+      p.fillPolygon(xs, ys, 4, hex(col));
+    };
+    quadPoly(144, 46, 151, 78, PENCIL);
+    quadPoly(144, 46, 151, 51, ERASER);
+    float tx[3] = {X(rx(144, 78), ry(144, 78)), X(rx(151, 78), ry(151, 78)), X(rx(147.5f, 86), ry(147.5f, 86))};
+    float ty[3] = {Y(rx(144, 78), ry(144, 78)), Y(rx(151, 78), ry(151, 78)), Y(rx(147.5f, 86), ry(147.5f, 86))};
+    p.fillPolygon(tx, ty, 3, hex(WOOD));
+  }
 
-  // Antenna and lamp (glows with the mood).
-  p.thickLine(X(100, 36), Y(100, 36), X(100, 20), Y(100, 20), 4 * S, hex(BRASS_DARK));
-  uint32_t lampC = pose.mood == Mood::Listening || pose.mood == Mood::Concerned ? CLAY : pose.mood == Mood::Thinking ? OLIVE : GOLD;
-  p.fillCircle(X(100, 15), Y(100, 15), 15 * S, hex(lampC), (uint8_t)(60 * pose.lampGlow));
-  p.fillCircle(X(100, 15), Y(100, 15), 8 * S, hex(lampC));
+  // Face.
+  ellipse(100, 86, 45, 43, SKIN);
 
-  // Cheeks.
-  p.fillCircle(X(70, 132), Y(70, 132), 7 * S, hex(CHEEK), pose.mood == Mood::Happy ? 230 : 170);
-  p.fillCircle(X(130, 132), Y(130, 132), 7 * S, hex(CHEEK), pose.mood == Mood::Happy ? 230 : 170);
+  // Hair: top-knot, a brass tie that glows with the mood, wavy fringe and side locks.
+  circle(103, 31, 13, HAIR);
+  uint32_t tieC = pose.mood == Mood::Listening || pose.mood == Mood::Concerned ? CLAY : pose.mood == Mood::Thinking ? OLIVE : pose.mood == Mood::Happy ? GOLD : BRASS;
+  rrect(95, 40, 16, 6, 3, tieC);
+  static const float HAIR_CAP[] = {54, 90, 48, 54, 70, 40, 100, 40, 132, 40, 154, 56, 146, 90, 143, 78, 137, 70, 128, 66,
+                                   122, 74, 108, 78, 96, 72, 88, 78, 76, 80, 66, 76, 60, 80, 56, 84, 54, 90};
+  cubicShape(HAIR_CAP, 6, HAIR);
+  static const float LOCK_L[] = {56, 88, 52, 96, 54, 104, 58, 108, 58, 100, 59, 94, 62, 88};
+  static const float LOCK_R[] = {144, 88, 148, 96, 146, 104, 142, 108, 142, 100, 141, 94, 138, 88};
+  cubicShape(LOCK_L, 2, HAIR);
+  cubicShape(LOCK_R, 2, HAIR);
+
+  // Brows: relaxed, or raised in the middle when worried.
+  if (pose.mood == Mood::Concerned) {
+    line(74, 76, 89, 70, 3.6f, HAIR);
+    line(126, 76, 111, 70, 3.6f, HAIR);
+  } else {
+    float lift = pose.mood == Mood::Listening ? -2 : 0;
+    quad(73, 73 + lift, 82, 67 + lift, 90, 72 + lift, 3.6f, HAIR);
+    quad(110, 72 + lift, 118, 67 + lift, 127, 73 + lift, 3.6f, HAIR);
+  }
 
   // Eyes.
-  float ex = pose.lookX * 5, ey = pose.lookY * 4;
   if (pose.mood == Mood::Happy) {
-    p.thickArc(X(82, 116), Y(82, 116), 7 * S, 4.5f * S, PI_F * 1.1f, PI_F * 1.9f, hex(INK));
-    p.thickArc(X(118, 116), Y(118, 116), 7 * S, 4.5f * S, PI_F * 1.1f, PI_F * 1.9f, hex(INK));
+    quad(73, 91, 82, 81, 91, 91, 3.8f, PUPIL);
+    quad(109, 91, 118, 81, 127, 91, 3.8f, PUPIL);
+  } else if (pose.mood == Mood::Sleeping || pose.blink < 0.3f) {
+    quad(74, 90, 82, 94, 90, 90, 3.2f, PUPIL);
+    quad(110, 90, 118, 94, 126, 90, 3.2f, PUPIL);
   } else {
-    float wide = pose.mood == Mood::Listening ? 1.15f : pose.mood == Mood::Concerned ? 0.92f : 1.0f;
-    float ry = 9 * S * wide * pose.blink;
+    float wide = pose.mood == Mood::Listening ? 1.08f : 1.0f;
+    float lx = pose.lookX * 3.5f, ly = pose.lookY * 3.0f;
     for (int side = -1; side <= 1; side += 2) {
-      float x = 100 + side * 18 + ex, y = 112 + ey;
-      p.fillEllipse(X(x, y), Y(x, y), 7.5f * S * wide, ry < 1.5f ? 1.5f : ry, hex(INK));
-      if (pose.blink > 0.5f) p.fillCircle(X(x + 2.5f, y - 3.5f), Y(x + 2.5f, y - 3.5f), 2.4f * S, hex(0xFFFFFF));
+      float ex = 100 + side * 18;
+      ellipse(ex, 89, 9.5f * wide, 11 * wide * pose.blink, SCLERA);
+      circle(ex + 1 + lx, 91 + ly, 6.6f, IRIS);
+      circle(ex + 1 + lx, 91 + ly, 3.6f, PUPIL);
+      circle(ex + 3.5f + lx, 87.5f + ly, 2.2f, 0xFFFFFF);
     }
   }
 
-  // Worried brows.
-  if (pose.mood == Mood::Concerned) {
-    p.thickLine(X(74, 96), Y(74, 96), X(89, 92), Y(89, 92), 3.5f * S, hex(INK));
-    p.thickLine(X(126, 96), Y(126, 96), X(111, 92), Y(111, 92), 3.5f * S, hex(INK));
-  }
+  // Nose and cheeks.
+  quad(98, 97, 102, 101, 98, 104, 2.6f, SKIN_SHADE);
+  ellipse(71, 104, 7, 4.5f, CHEEK, pose.mood == Mood::Happy ? 190 : 128);
+  ellipse(129, 104, 7, 4.5f, CHEEK, pose.mood == Mood::Happy ? 190 : 128);
 
   // Mouth.
   if (pose.mood == Mood::Speaking) {
-    float open = pose.mouth;
-    p.fillEllipse(X(100, 139), Y(100, 139), (8 + open * 3) * S, (2 + open * 8) * S, hex(MOUTH));
+    ellipse(100, 115, 7 + pose.mouth * 3, 2 + pose.mouth * 7, MOUTH);
   } else if (pose.mood == Mood::Listening) {
-    p.fillEllipse(X(100, 139), Y(100, 139), 5 * S, 4 * S, hex(MOUTH));
+    ellipse(100, 115, 4, 3.5f, MOUTH);
   } else if (pose.mood == Mood::Concerned) {
-    p.thickQuad(X(90, 143), Y(90, 143), X(100, 134), Y(100, 134), X(110, 143), Y(110, 143), 4 * S, hex(INK));
+    quad(90, 117, 100, 111, 110, 117, 3.6f, MOUTH);
   } else if (pose.mood == Mood::Sleeping) {
-    p.thickLine(X(93, 138), Y(93, 138), X(107, 138), Y(107, 138), 3.5f * S, hex(INK));
+    line(94, 114, 106, 114, 3.2f, MOUTH);
   } else {
-    float big = pose.mood == Mood::Happy ? 1.35f : 1.0f;
-    p.thickQuad(X(100 - 12 * big, 135), Y(100 - 12 * big, 135), X(100, 135 + 11 * big), Y(100, 135 + 11 * big), X(100 + 12 * big, 135),
-                Y(100 + 12 * big, 135), 4 * S, hex(INK));
+    float big = pose.mood == Mood::Happy ? 1.3f : 1.0f;
+    quad(100 - 12 * big, 111, 100, 111 + 10 * big, 100 + 12 * big, 111, 3.6f, MOUTH);
   }
 
-  // Thinking dots circling the lamp.
-  if (pose.mood == Mood::Thinking) {
+  // Thinking dots circling the top-knot.
+  if (pose.mood == Mood::Thinking)
     for (int i = 0; i < 3; i++) {
       float a = pose.dots * 3 + i * 2.094f;
-      float dx = cosf(a) * 26, dy = sinf(a) * 7;
-      p.fillCircle(X(100 + dx, 4 + dy), Y(100 + dx, 4 + dy), 4.5f * S, hex(OLIVE), sinf(a) > 0 ? 255 : 150);
+      float dx = cosf(a) * 28, dy = sinf(a) * 7;
+      circle(103 + dx, 14 + dy, 4.5f, OLIVE, sinf(a) > 0 ? 255 : 150);
     }
-  }
-  // Sleeping: little z's as dots drifting up.
-  if (pose.mood == Mood::Sleeping) {
+  // Dozing: little dots drifting up.
+  if (pose.mood == Mood::Sleeping)
     for (int i = 0; i < 3; i++) {
       float ph = fmodf(pose.dots * 0.3f + i / 3.0f, 1.0f);
-      p.fillCircle(X(150 + ph * 20, 60 - ph * 40), Y(150 + ph * 20, 60 - ph * 40), (2 + ph * 3) * S, hex(CREAM), (uint8_t)(200 * (1 - ph)));
+      circle(150 + ph * 20, 50 - ph * 40, 2 + ph * 3, CREAM, (uint8_t)(200 * (1 - ph)));
     }
-  }
 }
 
 }  // namespace zk
