@@ -31,7 +31,22 @@ jobs:
           arduino-cli core install esp32:esp32@3.2.0
           arduino-cli lib update-index
           arduino-cli lib install "GFX Library for Arduino" "U8g2" "SensorLib" "XPowersLib" "ArduinoJson" "Improv WiFi Library"
+          arduino-cli lib uninstall WiFi || true   # an old non-ESP32 WiFi library pulled in as a dependency
           arduino-cli lib list
+
+      - name: Library facts (reported as annotations)
+        shell: bash
+        run: |
+          L=~/Arduino/libraries
+          note() { echo "::notice title=$1::$(echo "$2" | head -40 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')"; }
+          note "touch headers" "$(find $L/SensorLib -iname '*cst9*' | sed "s|$L/||")"
+          note "touch class" "$(grep -rhoE 'class TouchDrvCST9[0-9A-Za-z_]*[^{]*|bool begin\([^)]*\)|void setPins\([^)]*\)|uint8_t getPoint\([^)]*\)' $(find $L/SensorLib -iname '*cst92*' | head -3) 2>/dev/null | sort -u)"
+          note "co5300" "$(grep -rhE 'Arduino_CO5300\(|setBrightness' $L/GFX_Library_for_Arduino/src/display/Arduino_CO5300.h 2>/dev/null)"
+          note "canvas" "$(grep -hE 'Arduino_Canvas\(|getFramebuffer|bool begin' $L/GFX_Library_for_Arduino/src/canvas/Arduino_Canvas.h 2>/dev/null)"
+          note "qspi" "$(grep -hE 'Arduino_ESP32QSPI\(' $L/GFX_Library_for_Arduino/src/databus/Arduino_ESP32QSPI.h 2>/dev/null)"
+          note "improv" "$(ls $L/Improv_WiFi_Library/src 2>/dev/null; grep -hE 'void (setDeviceInfo|onImprov|setCustom|handleSerial)[^;]*' $L/Improv_WiFi_Library/src/*.h 2>/dev/null)"
+          note "xpowers" "$(grep -rhoE 'bool begin\(TwoWire[^)]*\)' $L/XPowersLib/src/XPowersAXP2101.tpp $L/XPowersLib/src/*.hpp 2>/dev/null | sort -u | head -5)"
+          note "esp_i2s" "$(grep -hE 'bool begin\(|bool setPins|void setPins' ~/.arduino15/packages/esp32/hardware/esp32/*/libraries/ESP_I2S/src/ESP_I2S.h 2>/dev/null)"
 
       - name: Check Zuki's drawing on a PC
         run: g++ -O2 -Wall -Werror -o preview firmware/tools/preview.cpp firmware/zuki/painter.cpp firmware/zuki/zuki_face.cpp && ./preview
