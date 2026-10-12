@@ -37,12 +37,23 @@ jobs:
         run: g++ -O2 -Wall -Werror -o preview firmware/tools/preview.cpp firmware/zuki/painter.cpp firmware/zuki/zuki_face.cpp && ./preview
 
       - name: Build
-        run: >
-          arduino-cli compile
-          --fqbn "esp32:esp32:esp32s3:PSRAM=opi,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,CDCOnBoot=cdc,USBMode=hwcdc"
-          --warnings default
-          --output-dir build
-          firmware/zuki
+        shell: bash
+        run: |
+          set -o pipefail
+          arduino-cli compile \
+            --fqbn "esp32:esp32:esp32s3:PSRAM=opi,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,CDCOnBoot=cdc,USBMode=hwcdc" \
+            --warnings default --output-dir build firmware/zuki 2>&1 | tee build.log
+
+      - name: Report build errors
+        if: failure()
+        shell: bash
+        run: |
+          # Collapse the compiler errors into annotations (readable from the GitHub API).
+          grep -E "error|Error|undefined reference|No such file" build.log | grep -v "^Error during build" | head -60 > errs.txt || true
+          [ -s errs.txt ] || tail -40 build.log > errs.txt
+          split -l 6 errs.txt chunk_
+          for f in chunk_*; do echo "::error::$(sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' "$f")"; done
+          arduino-cli lib list | head -20 | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/^/::notice::/'
 
       - name: Publish to the CRM install page
         if: github.ref == 'refs/heads/main'
