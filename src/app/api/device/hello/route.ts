@@ -17,5 +17,6 @@ export async function GET(req: Request) {
     device: d.device.name,
     canListen: canTranscribe(),
     canSpeak: cloudVoiceReady(),
+    tzMinutes: g.tzMinutes,
   });
 }

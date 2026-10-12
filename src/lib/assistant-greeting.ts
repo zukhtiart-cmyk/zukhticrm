@@ -113,5 +113,5 @@ export async function greetingFor(user: U) {
   const text = top.length
     ? `${hello}, ${first}! ${top.join(" ")} Where do you want to start?`
     : `${hello}, ${first}! All quiet so far. What's happening today?`;
-  return { text, nudges: top, attention: top.length > 0, firstName: first };
+  return { text, nudges: top, attention: top.length > 0, firstName: first, tzMinutes: tz === "Asia/Dubai" ? 240 : 330 };
 }

@@ -1,0 +1,66 @@
+name: Zuki device firmware
+
+# Builds the desk-device firmware and publishes it to the CRM's install page (public/zuki-device).
+on:
+  push:
+    branches: [main]
+    paths: ["firmware/**", ".github/workflows/firmware.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: firmware
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install the ESP32 core and libraries
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli config set library.enable_unsafe_install true
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@3.2.0
+          arduino-cli lib update-index
+          arduino-cli lib install "GFX Library for Arduino" "U8g2" "SensorLib" "XPowersLib" "ArduinoJson" "Improv WiFi Library"
+          arduino-cli lib list
+
+      - name: Check Zuki's drawing on a PC
+        run: g++ -O2 -Wall -Werror -o preview firmware/tools/preview.cpp firmware/zuki/painter.cpp firmware/zuki/zuki_face.cpp && ./preview
+
+      - name: Build
+        run: >
+          arduino-cli compile
+          --fqbn "esp32:esp32:esp32s3:PSRAM=opi,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,CDCOnBoot=cdc,USBMode=hwcdc"
+          --warnings default
+          --output-dir build
+          firmware/zuki
+
+      - name: Publish to the CRM install page
+        if: github.ref == 'refs/heads/main'
+        run: |
+          VER=$(grep -oP 'ZUKI_FW_VERSION "\K[^"]+' firmware/zuki/config.h)
+          mkdir -p public/zuki-device
+          cp build/zuki.ino.merged.bin public/zuki-device/zuki.bin
+          cat > public/zuki-device/manifest.json <<EOF
+          {
+            "name": "Zuki desk",
+            "version": "$VER",
+            "new_install_prompt_erase": true,
+            "builds": [{ "chipFamily": "ESP32-S3", "parts": [{ "path": "zuki.bin", "offset": 0 }] }]
+          }
+          EOF
+          git config user.name "Zukhti Home"
+          git config user.email "agateshub@gmail.com"
+          git add public/zuki-device
+          git commit -m "Zuki device firmware $VER (built by GitHub Actions)" || exit 0
+          git pull --rebase
+          git push
