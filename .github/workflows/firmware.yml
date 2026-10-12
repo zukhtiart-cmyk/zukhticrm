@@ -75,18 +75,32 @@ jobs:
         run: |
           VER=$(grep -oP 'ZUKI_FW_VERSION "\K[^"]+' firmware/zuki/config.h)
           mkdir -p public/zuki-device
-          cp build/zuki.ino.merged.bin public/zuki-device/zuki.bin
+          rm -f public/zuki-device/*.bin
+          # Just the parts that matter (not a 16 MB full-flash image): bootloader, partition table, boot selector, app.
+          cp build/zuki.ino.bootloader.bin public/zuki-device/bootloader.bin
+          cp build/zuki.ino.partitions.bin public/zuki-device/partitions.bin
+          cp "$(ls ~/.arduino15/packages/esp32/hardware/esp32/*/tools/partitions/boot_app0.bin | head -1)" public/zuki-device/boot_app0.bin
+          cp build/zuki.ino.bin public/zuki-device/zuki.bin
           cat > public/zuki-device/manifest.json <<EOF
           {
             "name": "Zuki desk",
             "version": "$VER",
-            "new_install_prompt_erase": true,
-            "builds": [{ "chipFamily": "ESP32-S3", "parts": [{ "path": "zuki.bin", "offset": 0 }] }]
+            "new_install_prompt_erase": false,
+            "builds": [{
+              "chipFamily": "ESP32-S3",
+              "parts": [
+                { "path": "bootloader.bin", "offset": 0 },
+                { "path": "partitions.bin", "offset": 32768 },
+                { "path": "boot_app0.bin", "offset": 57344 },
+                { "path": "zuki.bin", "offset": 65536 }
+              ]
+            }]
           }
           EOF
+          ls -la public/zuki-device
           git config user.name "Zukhti Home"
           git config user.email "agateshub@gmail.com"
-          git add public/zuki-device
+          git add -A public/zuki-device
           git commit -m "Zuki device firmware $VER (built by GitHub Actions)" || exit 0
           git pull --rebase
           git push
