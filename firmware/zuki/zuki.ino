@@ -9,7 +9,7 @@
 #include <WiFi.h>
 #include <Wire.h>
 #include <ImprovWiFiLibrary.h>
-#include <TouchDrvCST92xx.h>
+#include <touch/TouchDrvCST92xx.hpp>
 #define XPOWERS_CHIP_AXP2101
 #include <XPowersLib.h>
 #include <time.h>
