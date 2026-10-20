@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import Logo from "./Logo";
+import Image from "next/image";
 
 const LINKS = [
   { href: "/#strata", label: "Stones" },
@@ -34,8 +34,7 @@ export default function Nav() {
     <>
       <header className={`nav ${solid && !open ? "is-solid" : ""}`}>
         <Link href="/" className="nav-brand" aria-label="Height Stones, home" onClick={() => setOpen(false)}>
-          <Logo className="nav-logo" />
-          <span>Height&nbsp;Stones</span>
+          <Image src="/height-stones-logo.png" alt="Height Stones" width={573} height={178} priority className="nav-logo" />
         </Link>
         <nav aria-label="Main" className="nav-links">
           {LINKS.map((l) => (
