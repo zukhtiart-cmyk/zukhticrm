@@ -51,7 +51,7 @@ export async function loadPortalProject(token: string, projectId: string | undef
         with: { photos: { columns: { id: true, url: true, caption: true }, where: eq(photos.clientVisible, true) } },
       },
       designs: {
-        columns: { id: true, room: true, title: true, version: true, fileUrl: true, fileType: true, notes: true, status: true, clientComment: true, decidedAt: true, sharedAt: true, worldId: true },
+        columns: { id: true, room: true, title: true, version: true, fileUrl: true, fileType: true, notes: true, status: true, clientComment: true, decidedAt: true, sharedAt: true, scene: true },
         where: ne(designs.status, "DRAFT"),
         orderBy: [asc(designs.room), asc(designs.title), desc(designs.version)],
       },

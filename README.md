@@ -185,17 +185,19 @@ How it behaves:
 10. Redeploy. In the CRM, open **Team → WhatsApp assistant**: the checklist should show all ticks.
 11. Test it: message your business number from a phone saved on a client (it needs a project). Then open **WhatsApp** in the CRM to see the draft.
 
-## Floor plan → 3D (Designs tab)
+## Floor plan → 3D home (Designs tab)
 
-Each project's **Designs** tab has a **Floor plan → 3D render** panel, powered by MeltFlex AI.
+Each project's **Designs** tab has a **Floor plan → 3D home** panel. No outside 3D service: Claude reads the plan, and the CRM builds the home in 3D in the browser.
 
-1. Upload the floor plan as a JPG/PNG/WebP (for a PDF, screenshot the page first).
-2. Pick the look (photorealistic, 3D model, clay, sketch, line drawing), the interior style, furnished/styled/empty, isometric or top-down, and whether room labels show.
-3. **Make 3D render** — about 20 seconds, 10 MeltFlex credits. It's saved as an internal draft design (same room + title = new version), with a link back to the plan.
-4. Check it, then **Share with client** as usual for approval in the portal.
-5. Optional: **Build 3D walk-through** on any image design — about a minute, 30 credits. When ready, a **Walk through in 3D** link appears for the team and, once shared, in the client portal.
+1. Upload the floor plan (JPG, PNG, WebP or PDF) and pick an interior style (Modern, Luxury, Japandi, Minimalist, Scandinavian, Traditional, Industrial, Coastal). Add a note if something on the plan is unclear.
+2. **Build 3D home** (about 20–40 seconds). Claude reads the rooms, sizes, doors and windows; the CRM lays out walls and furnishes each room for its use (beds, wardrobes, sofa and TV wall, dining set, kitchen counters, bathroom fittings, puja unit and more).
+3. The 3D viewer opens:
+   - **Dollhouse** — spin and zoom around the whole home; switch between cut and full-height walls. Tap a room name to walk into it.
+   - **Walk through** — first person. Computer: drag to look, W A S D or arrow keys to move. Phone: joystick to move, drag to look. Room buttons jump between rooms.
+   - Change the style live and **Save the look** while the design is still a draft.
+4. The picture is saved as a draft design version. **Share with client** as usual: they approve it in the portal and can walk through it too.
 
-Setup: add `MELTFLEX_API_KEY` (from meltflexai.com/settings, any subscription) in Vercel → Settings → Environment Variables, then redeploy. Failed builds are refunded by MeltFlex. Out-of-credit and busy errors are shown in plain words.
+Uses `ANTHROPIC_API_KEY` (already set for Zuki). Optional: `ANTHROPIC_PLAN_MODEL` to pick a different Claude model for plan reading. It's a 3D model, not a photoreal render: room sizes come from the plan, furniture is placed automatically.
 
 ## Set up and deploy on Vercel
 

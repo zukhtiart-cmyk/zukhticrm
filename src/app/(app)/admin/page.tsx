@@ -66,18 +66,13 @@ export default async function AdminPage() {
     [
       "ANTHROPIC_API_KEY",
       !!process.env.ANTHROPIC_API_KEY,
-      "Smart replies (otherwise rule-based)",
+      "Smart replies (otherwise rule-based), and floor plan → 3D homes",
     ],
     ["CRON_SECRET", !!process.env.CRON_SECRET, "Saturday weekly summaries"],
     [
       "ELEVENLABS_API_KEY",
       !!process.env.ELEVENLABS_API_KEY,
       "Zuki's natural voice, and listening on desk devices",
-    ],
-    [
-      "MELTFLEX_API_KEY",
-      !!process.env.MELTFLEX_API_KEY,
-      "Floor plan → 3D renders and walk-throughs (Designs tab)",
     ],
   ];
   return (

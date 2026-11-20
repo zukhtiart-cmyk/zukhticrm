@@ -14,6 +14,7 @@ export async function callTool<T>(
   client: Anthropic,
   params: Params,
   toolName: string,
+  timeoutMs = 40_000,
 ): Promise<T> {
   const pick = (res: Anthropic.Messages.Message) => {
     const block = res.content.find(
@@ -23,7 +24,7 @@ export async function callTool<T>(
       throw new Error("The AI didn't return a result. Try again.");
     return block.input as T;
   };
-  const opts = { timeout: 40_000, maxRetries: 1 };
+  const opts = { timeout: timeoutMs, maxRetries: 1 };
   try {
     return pick(
       await client.messages.create(

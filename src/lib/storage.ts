@@ -39,25 +39,6 @@ export async function saveFile(file: File, folder: string) {
   return `/uploads/${key}`;
 }
 
-/** Reads back a file saved with saveFile (any of its three URL shapes). */
-export async function readStoredFile(url: string): Promise<{ bytes: Buffer; type: string }> {
-  if (url.startsWith("/files/")) {
-    const { get } = await import("@vercel/blob");
-    const r = await get(url.slice("/files/".length), { access: "private" });
-    if (!r || r.statusCode !== 200) throw new Error("Stored file not found.");
-    return { bytes: Buffer.from(await new Response(r.stream).arrayBuffer()), type: r.blob.contentType || "image/png" };
-  }
-  if (url.startsWith("/uploads/")) {
-    const { readFile } = await import("node:fs/promises");
-    const bytes = await readFile(path.join(process.cwd(), "public", url));
-    const ext = url.split(".").pop()?.toLowerCase();
-    return { bytes, type: ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png" };
-  }
-  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-  if (!res.ok) throw new Error("Stored file not found.");
-  return { bytes: Buffer.from(await res.arrayBuffer()), type: res.headers.get("content-type") || "image/png" };
-}
-
 /** Adds the portal token to private file links so clients can open them from the portal. */
 export function portalFileUrl(url: string, token: string) {
   return url.startsWith("/files/") ? `${url}?t=${encodeURIComponent(token)}` : url;

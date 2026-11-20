@@ -3,8 +3,9 @@
 import { and, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { clients, db, designs } from "@/db";
-import { readStoredFile, saveFile } from "@/lib/storage";
-import { RENDER_OPTIONS, type RenderOptions, renderFloorPlan, startWorld } from "@/lib/render3d";
+import { saveFile } from "@/lib/storage";
+import { readFloorPlan } from "@/lib/floorplan-ai";
+import { INTERIOR_STYLES, type HomeScene, type InteriorStyle } from "@/lib/home-scene";
 import { newPortalToken } from "@/lib/portal";
 import { assertProjectAccess } from "./data";
 
@@ -66,96 +67,78 @@ export async function deleteDesign(form: FormData) {
   done(project.id);
 }
 
-// ---------- Floor plan → 3D (MeltFlex) ----------
+// ---------- Floor plan → 3D home ----------
 
-const PLAN_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const pick = <T extends readonly string[]>(list: T, v: FormDataEntryValue | null, fallback: T[number]): T[number] =>
-  (list as readonly string[]).includes(String(v)) ? (String(v) as T[number]) : fallback;
-const nice = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace("-", " ");
+const PLAN_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
-export async function renderFromFloorPlan(_: unknown, form: FormData) {
+/** Reads a floor plan with Claude and saves the 3D home as a draft design. The browser then saves its picture. */
+export async function createHomeFromPlan(_: unknown, form: FormData) {
   const { user, project } = await assertProjectAccess(String(form.get("projectId")), "design");
   const plan = form.get("plan");
-  if (!(plan instanceof File) || plan.size === 0) return { error: "Choose the floor plan image." };
-  if (plan.type === "application/pdf") return { error: "MeltFlex reads images only — take a screenshot of the PDF page (JPG or PNG) and upload that." };
-  if (!PLAN_TYPES.includes(plan.type)) return { error: "Upload the plan as a JPG, PNG or WebP image." };
-  if (plan.size > 10 * 1024 * 1024) return { error: "The plan image is too large (max 10 MB)." };
+  if (!(plan instanceof File) || plan.size === 0) return { error: "Choose the floor plan (image or PDF)." };
+  if (!PLAN_TYPES.includes(plan.type)) return { error: "Upload the plan as a JPG, PNG, WebP image or a PDF." };
+  if (plan.size > (plan.type === "application/pdf" ? 20 : 5) * 1024 * 1024) return { error: plan.type === "application/pdf" ? "That PDF is too large (max 20 MB)." : "That image is too large (max 5 MB)." };
+  const style = (INTERIOR_STYLES as readonly string[]).includes(String(form.get("style"))) ? (String(form.get("style")) as InteriorStyle) : "modern";
+  const hint = String(form.get("hint") ?? "").trim().slice(0, 300);
 
-  const opts: RenderOptions = {
-    style: pick(RENDER_OPTIONS.style, form.get("style"), "photorealistic"),
-    interiorStyle: pick(RENDER_OPTIONS.interiorStyle, form.get("interiorStyle"), "auto"),
-    furniture: pick(RENDER_OPTIONS.furniture, form.get("furniture"), "styled"),
-    view: pick(RENDER_OPTIONS.view, form.get("view"), "isometric"),
-    labels: pick(RENDER_OPTIONS.labels, form.get("labels"), "none"),
-  };
-  const room = String(form.get("room") ?? "").trim() || "Floor plan";
-  const look = opts.interiorStyle !== "auto" && (opts.style === "photorealistic" || opts.style === "3d-model") ? nice(opts.interiorStyle) : nice(opts.style);
-  const title = String(form.get("title") ?? "").trim() || `3D view — ${look}, ${opts.furniture === "empty" ? "empty" : "furnished"}${opts.view === "topdown" ? ", top-down" : ""}`;
-
-  let made: Awaited<ReturnType<typeof renderFloorPlan>>;
+  let scene: HomeScene;
   try {
-    made = await renderFloorPlan(plan, opts);
+    scene = await readFloorPlan({ data: Buffer.from(await plan.arrayBuffer()).toString("base64"), mediaType: plan.type }, hint || undefined);
   } catch (e) {
-    return { error: (e as Error).message };
+    const msg = (e as Error).message;
+    const status = (e as { status?: number }).status;
+    console.error("createHomeFromPlan:", status, msg);
+    if (status === 401 || status === 403) return { error: "The Claude key (ANTHROPIC_API_KEY) isn't valid — check it in Vercel." };
+    if (status === 429 || status === 529 || status === 503) return { error: "Claude is busy right now — try again in a minute." };
+    if (status && status >= 400) return { error: "Claude couldn't read that plan. Try a clearer image, or a PDF of the plan." };
+    return { error: /timed? ?out|timeout/i.test(msg) ? "Reading the plan took too long — try a smaller or clearer image." : msg };
   }
   const planUrl = await saveFile(plan, `designs/${project.id}`);
-  const ext = made.bytes[0] === 0xff ? "jpg" : made.bytes[0] === 0x52 ? "webp" : "png";
-  const out = new File([new Uint8Array(made.bytes)], `render.${ext}`, { type: ext === "jpg" ? "image/jpeg" : `image/${ext}` });
-  const fileUrl = await saveFile(out, `designs/${project.id}`);
-
+  const room = String(form.get("room") ?? "").trim() || "Whole home";
+  const title = String(form.get("title") ?? "").trim() || "3D home";
   const prev = await db.query.designs.findFirst({
     where: and(eq(designs.projectId, project.id), eq(designs.room, room), eq(designs.title, title)),
     orderBy: desc(designs.version),
   });
-  await db.insert(designs).values({
-    projectId: project.id,
-    room,
-    title,
-    version: (prev?.version ?? 0) + 1,
-    fileUrl,
-    fileType: "image",
-    notes: String(form.get("notes") ?? "").trim() || null,
-    status: "DRAFT",
-    uploadedById: user.id,
-    render: { planUrl, sourceUrl: made.sourceUrl ?? undefined, style: opts.style, interiorStyle: opts.interiorStyle, furniture: opts.furniture, view: opts.view },
-  });
+  const [row] = await db
+    .insert(designs)
+    .values({
+      projectId: project.id,
+      room,
+      title,
+      version: (prev?.version ?? 0) + 1,
+      fileUrl: planUrl,
+      fileType: plan.type === "application/pdf" ? "pdf" : "image",
+      notes: String(form.get("notes") ?? "").trim() || null,
+      status: "DRAFT",
+      uploadedById: user.id,
+      render: { planUrl, interiorStyle: style, snapshot: false },
+      scene,
+    })
+    .returning({ id: designs.id });
   done(project.id);
-  return { ok: `Render ready (${made.credits} credits) — check it below, then share it with the client or build a walk-through.` };
+  return { ok: "Your 3D home is ready.", id: row.id, rooms: scene.rooms.length };
 }
 
-export async function buildWalkthrough(form: FormData) {
+/** Saves the 3D picture (and the chosen look) for a design made from a floor plan. */
+export async function saveHomeSnapshot(form: FormData) {
   const { project } = await assertProjectAccess(String(form.get("projectId")), "design");
   const d = await db.query.designs.findFirst({ where: and(eq(designs.id, String(form.get("id"))), eq(designs.projectId, project.id)) });
-  if (!d || d.fileType !== "image") return;
-  if (d.worldStatus === "building" || d.worldId) return; // never pay twice
-  try {
-    let source: { imageUrl?: string; image?: string };
-    if (d.render?.sourceUrl) source = { imageUrl: d.render.sourceUrl };
-    else if (/^https?:\/\//.test(d.fileUrl)) source = { imageUrl: d.fileUrl };
-    else {
-      const f = await readStoredFile(d.fileUrl);
-      source = { image: `data:${f.type};base64,${f.bytes.toString("base64")}` };
-    }
-    await db.update(designs).set({ worldStatus: "building", worldOperation: null }).where(eq(designs.id, d.id));
-    const w = await startWorld(source, `${project.name} — ${d.title}`);
-    await db
-      .update(designs)
-      .set(w.status === "ready" ? { worldId: w.worldId, worldStatus: "ready" } : { worldOperation: w.operationId, worldStatus: "building" })
-      .where(eq(designs.id, d.id));
-  } catch (e) {
-    await db.update(designs).set({ worldStatus: `failed: ${(e as Error).message}`.slice(0, 300) }).where(eq(designs.id, d.id));
+  if (!d?.scene) return { error: "Not a 3D home." };
+  const file = form.get("file");
+  const style = String(form.get("style") ?? "");
+  const styleOk = (INTERIOR_STYLES as readonly string[]).includes(style);
+  // A shared design keeps its look; the team saves a new version for a different one.
+  if (d.status !== "DRAFT" && styleOk && style !== d.render?.interiorStyle) return { error: "This design is with the client — make a new version to change the look." };
+  const set: Partial<typeof designs.$inferInsert> = {};
+  if (file instanceof File && file.size > 0 && file.type === "image/jpeg" && file.size < 8 * 1024 * 1024) {
+    set.fileUrl = await saveFile(file, `designs/${project.id}`);
+    set.fileType = "image";
   }
+  set.render = { ...(d.render ?? {}), snapshot: !!set.fileUrl || !!d.render?.snapshot, interiorStyle: styleOk ? style : d.render?.interiorStyle };
+  await db.update(designs).set(set).where(eq(designs.id, d.id));
   done(project.id);
-}
-
-/** Clears a failed walk-through so it can be tried again. */
-export async function resetWalkthrough(form: FormData) {
-  const { project } = await assertProjectAccess(String(form.get("projectId")), "design");
-  await db
-    .update(designs)
-    .set({ worldStatus: null, worldOperation: null })
-    .where(and(eq(designs.id, String(form.get("id"))), eq(designs.projectId, project.id)));
-  done(project.id);
+  return { ok: true };
 }
 
 // ---------- Client portal link ----------
