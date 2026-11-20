@@ -3,8 +3,14 @@ import { dateTime } from "@/lib/format";
 import { Badge, Empty, Section } from "@/components/ui";
 import { DesignStatusBadge, DesignThumb } from "@/components/design-bits";
 import { loadProject } from "../../data";
-import { deleteDesign, shareDesign, unshareDesign } from "../../design-actions";
+import { buildWalkthrough, deleteDesign, resetWalkthrough, shareDesign, unshareDesign } from "../../design-actions";
+import { render3dReady, worldViewerUrl } from "@/lib/render3d";
 import { DesignUploadForm } from "./upload-form";
+import { FloorPlanRenderForm } from "./render-form";
+import { WalkthroughWatcher } from "./walkthrough";
+
+// A floor-plan render waits on MeltFlex for ~20 s.
+export const maxDuration = 60;
 
 export default async function DesignsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,6 +37,18 @@ export default async function DesignsPage({ params }: { params: Promise<{ id: st
       </div>
 
       {edit && (
+        <Section title="Floor plan → 3D render">
+          {render3dReady() ? (
+            <FloorPlanRenderForm projectId={project.id} rooms={rooms} />
+          ) : (
+            <p className="text-sm text-muted">
+              Turn this on by adding <code>MELTFLEX_API_KEY</code> in Vercel (from meltflexai.com/settings), then redeploy. Upload a floor plan here and get a furnished 3D picture in about 20 seconds.
+            </p>
+          )}
+        </Section>
+      )}
+
+      {edit && (
         <Section title="Upload a design">
           <DesignUploadForm projectId={project.id} rooms={rooms} />
         </Section>
@@ -54,6 +72,34 @@ export default async function DesignsPage({ params }: { params: Promise<{ id: st
                     </div>
                     <DesignStatusBadge status={latest.status} />
                   </div>
+                  {latest.render && (
+                    <p className="mt-1 text-xs text-muted">
+                      Made from a floor plan ·{" "}
+                      {latest.render.planUrl && (
+                        <a href={latest.render.planUrl} target="_blank" className="underline hover:text-brass">
+                          see plan
+                        </a>
+                      )}
+                    </p>
+                  )}
+                  {latest.worldId && (
+                    <a href={worldViewerUrl(latest.worldId)} target="_blank" className="btn-brass mt-2 inline-flex px-3 py-1.5 text-xs">
+                      Walk through in 3D ↗
+                    </a>
+                  )}
+                  {edit && !latest.worldId && latest.worldStatus === "building" && (
+                    <div className="mt-2">
+                      <WalkthroughWatcher designId={latest.id} />
+                    </div>
+                  )}
+                  {edit && latest.worldStatus?.startsWith("failed") && (
+                    <form action={resetWalkthrough} className="mt-2 flex flex-wrap items-center gap-2 text-xs text-clay">
+                      <input type="hidden" name="projectId" value={project.id} />
+                      <input type="hidden" name="id" value={latest.id} />
+                      <span>{latest.worldStatus.replace(/^failed: ?/, "Walk-through didn't build: ")}</span>
+                      <button className="btn-ghost px-2 py-1 text-xs">Clear</button>
+                    </form>
+                  )}
                   {latest.notes && <p className="mt-1 text-sm text-muted">{latest.notes}</p>}
                   {latest.clientComment && (
                     <p className={`mt-2 rounded-lg px-2 py-1.5 text-sm ${latest.status === "APPROVED" ? "bg-olive-soft text-olive" : "bg-clay-soft text-clay"}`}>
@@ -81,6 +127,15 @@ export default async function DesignsPage({ params }: { params: Promise<{ id: st
                           <input type="hidden" name="projectId" value={project.id} />
                           <input type="hidden" name="id" value={latest.id} />
                           <button className="btn-ghost px-3 py-1.5 text-xs">Withdraw from client</button>
+                        </form>
+                      )}
+                      {render3dReady() && latest.fileType === "image" && !latest.worldId && !latest.worldStatus && (
+                        <form action={buildWalkthrough}>
+                          <input type="hidden" name="projectId" value={project.id} />
+                          <input type="hidden" name="id" value={latest.id} />
+                          <button className="btn-ghost px-3 py-1.5 text-xs" title="About a minute · 30 MeltFlex credits">
+                            Build 3D walk-through · 30 cr
+                          </button>
                         </form>
                       )}
                       {latest.status === "CHANGES_REQUESTED" && <p className="text-xs text-muted">Upload a new version with the same room and title.</p>}

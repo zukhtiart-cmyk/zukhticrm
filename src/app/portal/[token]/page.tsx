@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { worldViewerUrl } from "@/lib/render3d";
 import { date, dateTime, money } from "@/lib/format";
 import { loadPortalProject } from "@/lib/portal-data";
 import { Badge, Empty, ProgressBar, Section } from "@/components/ui";
@@ -248,6 +249,15 @@ export default async function PortalPage({
                 <DesignStatusBadge status={d.status} />
               </div>
               {d.notes && <p className="mt-1 text-sm text-muted">{d.notes}</p>}
+              {d.worldId && (
+                <a
+                  href={worldViewerUrl(d.worldId)}
+                  target="_blank"
+                  className="btn-brass mt-2 inline-flex px-3 py-1.5 text-xs"
+                >
+                  Walk through in 3D ↗
+                </a>
+              )}
               {d.status === "PENDING" ? (
                 <DesignDecision
                   token={token}

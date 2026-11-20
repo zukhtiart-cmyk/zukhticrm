@@ -339,6 +339,12 @@ export const designs = pgTable("designs", {
   decidedAt: timestamp("decided_at", { withTimezone: true }),
   sharedAt: timestamp("shared_at", { withTimezone: true }),
   uploadedById: text("uploaded_by_id").references(() => users.id),
+  /** Floor-plan renders: the options used and the source plan (see lib/render3d.ts). */
+  render: jsonb("render").$type<{ planUrl?: string; sourceUrl?: string; style?: string; interiorStyle?: string; furniture?: string; view?: string } | null>(),
+  /** Walk-through 3D world built from this render: "building" while it's being made. */
+  worldId: text("world_id"),
+  worldStatus: text("world_status"),
+  worldOperation: text("world_operation"),
   createdAt: created(),
 });
 

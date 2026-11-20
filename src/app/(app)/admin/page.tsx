@@ -74,6 +74,11 @@ export default async function AdminPage() {
       !!process.env.ELEVENLABS_API_KEY,
       "Zuki's natural voice, and listening on desk devices",
     ],
+    [
+      "MELTFLEX_API_KEY",
+      !!process.env.MELTFLEX_API_KEY,
+      "Floor plan → 3D renders and walk-throughs (Designs tab)",
+    ],
   ];
   return (
     <>

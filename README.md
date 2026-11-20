@@ -185,6 +185,18 @@ How it behaves:
 10. Redeploy. In the CRM, open **Team → WhatsApp assistant**: the checklist should show all ticks.
 11. Test it: message your business number from a phone saved on a client (it needs a project). Then open **WhatsApp** in the CRM to see the draft.
 
+## Floor plan → 3D (Designs tab)
+
+Each project's **Designs** tab has a **Floor plan → 3D render** panel, powered by MeltFlex AI.
+
+1. Upload the floor plan as a JPG/PNG/WebP (for a PDF, screenshot the page first).
+2. Pick the look (photorealistic, 3D model, clay, sketch, line drawing), the interior style, furnished/styled/empty, isometric or top-down, and whether room labels show.
+3. **Make 3D render** — about 20 seconds, 10 MeltFlex credits. It's saved as an internal draft design (same room + title = new version), with a link back to the plan.
+4. Check it, then **Share with client** as usual for approval in the portal.
+5. Optional: **Build 3D walk-through** on any image design — about a minute, 30 credits. When ready, a **Walk through in 3D** link appears for the team and, once shared, in the client portal.
+
+Setup: add `MELTFLEX_API_KEY` (from meltflexai.com/settings, any subscription) in Vercel → Settings → Environment Variables, then redeploy. Failed builds are refunded by MeltFlex. Out-of-credit and busy errors are shown in plain words.
+
 ## Set up and deploy on Vercel
 
 1. **Import the repo** in Vercel (New Project → this repo). Framework: Next.js.
