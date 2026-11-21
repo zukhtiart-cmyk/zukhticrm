@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { HomeScene, InteriorStyle } from "@/lib/home-scene";
+import type { HomeScene } from "@/lib/home-scene";
 
 /** Loads the three.js viewer only in the browser. */
 export const Home3D = dynamic(() => import("./viewer"), {
@@ -15,4 +15,4 @@ export const Home3D = dynamic(() => import("./viewer"), {
     </div>
   ),
 });
-export type { HomeScene, InteriorStyle };
+export type { HomeScene };

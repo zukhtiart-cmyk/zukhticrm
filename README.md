@@ -205,6 +205,18 @@ Each project's **Designs** tab has a **Floor plan → 3D home** panel. No outsid
 
 Uses `ANTHROPIC_API_KEY` (already set for Zuki). Optional: `ANTHROPIC_PLAN_MODEL` to choose the Claude model for plan reading. It's a concept 3D model, not a photoreal render. Furniture drawn on the plan is built where it's drawn (pushed flat against the wall behind it); rooms with nothing drawn are furnished automatically against real walls. Service shafts stay empty.
 
+## Design Studio: themes, moods, room styling (Designs tab → Open in studio)
+
+Every 3D home opens in the **Design Studio** — the 3D view with a side panel:
+
+- **Theme** — 13 ready themes (Modern, Luxury, Contemporary Indian, Japandi, Minimalist, Scandinavian, Neo-classical, Art Deco, Mid-century, Boho, Traditional, Industrial, Coastal). A theme sets the floors, wall colours, feature wall (fluted, slats, moulding, stone, marble, wallpaper or paint), wood, fabrics, metal, bed and sofa shapes, legs, ceiling (plain, cove, tray, rafters), ceiling lights (pendant, globes, chandelier, linear, rattan) and curtains.
+  - **Make a theme from Pinterest pictures**: add 1–8 pictures of the look you want; Claude works out the materials, colours and furniture style and saves it as your own theme, available on every project.
+- **Mood** — Bright morning, Golden hour, Cozy evening (curtains drawn, lamps on), Night luxe, Moody. Changes the sun, sky, lamps and cove lights.
+- **Rooms** — style one room on top of the theme. Drop Pinterest pictures for the room (bed, flooring, wall, colours): each is read and applied. A close-up of a pattern can be used as that room's wallpaper. Or set the floor, wall paint, feature wall, colours and shapes by hand. Each side of a wall takes the paint of the room it faces.
+- **Shots** — frame a view (walk-through or dollhouse) and save it. Saved shots are the views for photo-real renders (Phase B).
+- **Save design** saves the look and a fresh picture for the design card. A design already with the client is saved as a new draft version.
+- **+ Make another option** copies the home as "Option B", "Option C"… to style differently. **Compare 3D options side by side** on the Designs tab shows them together; share the ones you like for the client to approve. In the portal the client can also try other themes and moods (without saving).
+
 ## Set up and deploy on Vercel
 
 1. **Import the repo** in Vercel (New Project → this repo). Framework: Next.js.

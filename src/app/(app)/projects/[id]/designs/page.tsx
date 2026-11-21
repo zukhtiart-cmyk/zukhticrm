@@ -8,6 +8,7 @@ import { deleteDesign, shareDesign, unshareDesign } from "../../design-actions";
 import { DesignUploadForm } from "./upload-form";
 import { FloorPlanRenderForm } from "./render-form";
 import { normaliseScene } from "@/lib/home-scene";
+import { lookTheme, normaliseLook, MOODS } from "@/lib/themes";
 
 const normaliseSafe = (s: unknown) => {
   try {
@@ -60,6 +61,11 @@ export default async function DesignsPage({ params }: { params: Promise<{ id: st
         </Section>
       )}
 
+      {project.designs.filter((d) => d.scene).length > 1 && (
+        <Link href={`/projects/${project.id}/designs/compare`} className="btn-ghost w-fit px-3 py-1.5 text-sm">
+          Compare 3D options side by side →
+        </Link>
+      )}
       {!project.designs.length && <Empty>No designs yet.</Empty>}
       {[...groups.entries()].map(([room, byTitle]) => (
         <Section key={room} title={room}>
@@ -81,7 +87,7 @@ export default async function DesignsPage({ params }: { params: Promise<{ id: st
                   {latest.scene && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <Link href={`/projects/${project.id}/designs/${latest.id}/3d`} className="btn-brass inline-flex px-3 py-1.5 text-xs">
-                        Open in 3D →
+                        Open in studio →
                       </Link>
                       {edit && (
                         <Link href={`/projects/${project.id}/designs/${latest.id}/plan`} className="btn-ghost inline-flex px-3 py-1.5 text-xs">
@@ -89,7 +95,7 @@ export default async function DesignsPage({ params }: { params: Promise<{ id: st
                         </Link>
                       )}
                       <span className="text-xs text-muted">
-                        {normaliseSafe(latest.scene)?.rooms.length ?? 0} spaces · {latest.render?.interiorStyle ?? "modern"}
+                        {normaliseSafe(latest.scene)?.rooms.length ?? 0} spaces · {lookTheme(normaliseLook(latest.look, latest.render?.interiorStyle)).label} · {MOODS[normaliseLook(latest.look).mood].label}
                         {latest.render?.planUrl && (
                           <>
                             {" · "}

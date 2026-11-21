@@ -4,30 +4,42 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { INTERIOR_STYLES, axisOpenings, type HomeScene, type InteriorStyle } from "@/lib/home-scene";
-import { makeMaterials, PALETTES } from "./materials";
+import { axisOpenings, type HomeScene } from "@/lib/home-scene";
+import { MOODS, MOOD_IDS, THEMES, type Look, type MoodId, type Shot } from "@/lib/themes";
 import { buildHouse, type Blocker, type Built } from "./build";
 import { clearGeoCache } from "./models";
 
 type Mode = "overview" | "walk";
-export type ViewerHandle = { snapshot: () => Promise<Blob | null> };
+export type ViewerApi = {
+  /** A picture from the standard dollhouse angle. */
+  snapshot: () => Promise<Blob | null>;
+  /** A picture of exactly what the camera sees now. */
+  shot: () => Promise<Blob | null>;
+  getCamera: () => Shot["cam"];
+  setCamera: (cam: Shot["cam"]) => void;
+};
+const lookKey = (l: Look, curtains: string) => JSON.stringify({ t: l.theme, c: l.custom, r: l.rooms, curtains });
 
 const EYE = 1.6;
 const RADIUS = 0.22;
 
 export default function HomeViewer({
   scene,
-  style: initialStyle,
-  canChangeStyle,
-  onStyleSave,
+  look: lookProp,
+  explore,
+  onReady,
+  onRoomChange,
   onFirstFrame,
   height = "min(78vh, 760px)",
 }: {
   scene: HomeScene;
-  style: InteriorStyle;
-  canChangeStyle?: boolean;
-  /** Called with the chosen style and a fresh picture when someone saves a new look. */
-  onStyleSave?: (style: InteriorStyle, snapshot: Blob | null) => Promise<void> | void;
+  /** Theme, mood and room overrides. Changing it updates the 3D. */
+  look: Look;
+  /** Lets the viewer (e.g. a client in the portal) try other themes and moods without saving. */
+  explore?: boolean;
+  onReady?: (api: ViewerApi) => void;
+  /** The room the walker is standing in. */
+  onRoomChange?: (room: string) => void;
   /** Called once with a picture after the first render (used to save the design thumbnail). */
   onFirstFrame?: (snapshot: Blob | null) => void;
   height?: string;
@@ -35,23 +47,30 @@ export default function HomeViewer({
   const host = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<Mode>("overview");
+  const skipMode = useRef(false);
   const [lowWalls, setLowWalls] = useState(true);
-  const [style, setStyle] = useState<InteriorStyle>(initialStyle);
-  const [savedStyle, setSavedStyle] = useState<InteriorStyle>(initialStyle);
-  const [saving, setSaving] = useState(false);
+  const [tryTheme, setTryTheme] = useState<string | null>(null);
+  const [tryMood, setTryMood] = useState<MoodId | null>(null);
+  const look: Look = explore ? { ...lookProp, ...(tryTheme ? { theme: tryTheme, custom: undefined, rooms: {} } : {}), mood: tryMood ?? lookProp.mood } : lookProp;
   const [here, setHere] = useState<string>("");
   const [failed, setFailed] = useState(false);
   const [touch, setTouch] = useState(false);
   const api = useRef<{
     setMode: (m: Mode) => void;
     setLow: (b: boolean) => void;
-    setStyle: (s: InteriorStyle) => void;
+    setLook: (l: Look) => void;
     goTo: (room: string) => void;
     snapshot: () => Promise<Blob | null>;
     stick: { x: number; y: number };
   } | null>(null);
   const firstFrameRef = useRef(onFirstFrame);
   firstFrameRef.current = onFirstFrame;
+  const readyRef = useRef(onReady);
+  readyRef.current = onReady;
+  const roomRef = useRef(onRoomChange);
+  roomRef.current = onRoomChange;
+  const lookRef = useRef(look);
+  lookRef.current = look;
 
   const roomNames = [...new Set(scene.rooms.map((r) => r.name))];
 
@@ -129,24 +148,64 @@ export default function HomeViewer({
     // ---------- the house ----------
     let built: Built | null = null;
     let blockers: Blocker[] = [];
-    let currentStyle: InteriorStyle = initialStyle;
+    let currentKey = "";
     let lowOn = true;
     let modeNow: Mode = "overview";
-    const build = (s: InteriorStyle) => {
+    let moodNow: MoodId = lookRef.current.mood;
+    const disposeRoot = (root: THREE.Object3D) => {
+      const mats = new Set<THREE.Material>();
+      root.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.geometry?.dispose();
+        (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => mats.add(x));
+      });
+      mats.forEach((m) => {
+        (m as THREE.MeshStandardMaterial).map?.dispose();
+        m.dispose();
+      });
+    };
+    const build = (l: Look) => {
+      const curtains = MOODS[l.mood].curtains;
+      const key = lookKey(l, curtains);
+      if (key === currentKey) return;
       if (built) {
         three.remove(built.root);
-        built.root.traverse((o) => {
-          const m = o as THREE.Mesh;
-          if (m.isMesh && m.geometry && !m.geometry.userData.shared) m.geometry.dispose();
-        });
+        disposeRoot(built.root);
         clearGeoCache();
       }
-      const M = makeMaterials(PALETTES[s]);
-      built = buildHouse(scene, M);
+      built = buildHouse(scene, l, { curtainsDrawn: curtains === "drawn" });
       blockers = built.blockers;
       three.add(built.root);
-      currentStyle = s;
+      currentKey = key;
       applyVisibility();
+      applyMood(l.mood);
+      renderer.shadowMap.needsUpdate = true;
+    };
+    // Light, sky and lamps for a mood.
+    const applyMood = (id: MoodId) => {
+      moodNow = id;
+      const m = MOODS[id];
+      sun.color.set(m.sun.color);
+      sun.intensity = m.sun.intensity;
+      const el2 = m.sun.elevation,
+        az = m.sun.azimuth;
+      sun.position.set(centre.x + Math.sin(az) * Math.cos(el2) * S * 1.4, Math.sin(el2) * S * 1.4 + 0.5, centre.z - Math.cos(az) * Math.cos(el2) * S * 1.4);
+      hemi.color.set(m.hemi.sky);
+      hemi.groundColor.set(m.hemi.ground);
+      hemi.intensity = m.hemi.intensity;
+      fill.intensity = id === "morning" ? 0.5 : 0.15;
+      three.environmentIntensity = m.env;
+      renderer.toneMappingExposure = m.exposure;
+      (three.background as THREE.Color).set(m.bg);
+      if (built) {
+        for (const l of built.lamps) l.intensity = m.lamps * 9;
+        built.root.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) if (mat.userData?.lamp) (mat as THREE.MeshStandardMaterial).emissiveIntensity = 0.5 + m.lamps * 1.6;
+        });
+      }
       renderer.shadowMap.needsUpdate = true;
     };
     const applyVisibility = () => {
@@ -158,7 +217,7 @@ export default function HomeViewer({
       for (const o of built.upper) o.visible = walk || !lowOn;
       renderer.shadowMap.needsUpdate = true;
     };
-    build(initialStyle);
+    build(lookRef.current);
 
     // ---------- labels ----------
     const labelData = roomNames.map((name) => {
@@ -384,6 +443,7 @@ export default function HomeViewer({
         if (rn && rn !== lastRoom) {
           lastRoom = rn;
           setHere(rn);
+          roomRef.current?.(rn);
         }
       } else orbit.update();
       renderer.render(three, camera);
@@ -421,6 +481,51 @@ export default function HomeViewer({
         orbit.target.copy(saveTarget);
         applyVisibility();
       });
+    // A picture of exactly what the camera sees now.
+    const shot = () =>
+      new Promise<Blob | null>((resolve) => {
+        const w = el.clientWidth,
+          h = el.clientHeight;
+        renderer.setPixelRatio(1);
+        renderer.setSize(1600, 1000, false);
+        const saveAspect = camera.aspect;
+        camera.aspect = 1.6;
+        camera.updateProjectionMatrix();
+        renderer.render(three, camera);
+        renderer.domElement.toBlob((b) => resolve(b), "image/jpeg", 0.92);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, small ? 1.5 : 2));
+        renderer.setSize(w, h, false);
+        camera.aspect = saveAspect;
+        camera.updateProjectionMatrix();
+      });
+    const getCamera = (): Shot["cam"] => {
+      const dir = new THREE.Vector3();
+      camera.getWorldDirection(dir);
+      const t = modeNow === "walk" ? camera.position.clone().add(dir) : orbit.target.clone();
+      const r = (n: number) => Math.round(n * 1000) / 1000;
+      return { p: [r(camera.position.x), r(camera.position.y), r(camera.position.z)], t: [r(t.x), r(t.y), r(t.z)], fov: camera.fov, walk: modeNow === "walk" };
+    };
+    const setCamera = (cam: Shot["cam"]) => {
+      if (cam.walk !== (modeNow === "walk")) {
+        setModeInner(cam.walk ? "walk" : "overview");
+        skipMode.current = true;
+        setMode(cam.walk ? "walk" : "overview");
+      }
+      camera.position.set(...cam.p);
+      camera.fov = cam.fov;
+      camera.updateProjectionMatrix();
+      if (cam.walk) {
+        const dx = cam.t[0] - cam.p[0],
+          dy = cam.t[1] - cam.p[1],
+          dz = cam.t[2] - cam.p[2];
+        yaw = Math.atan2(-dx, -dz);
+        pitch = Math.atan2(dy, Math.hypot(dx, dz));
+      } else {
+        orbit.target.set(...cam.t);
+        orbit.update();
+      }
+    };
+    readyRef.current?.({ snapshot, shot, getCamera, setCamera });
     firstFrameRef.current &&
       requestAnimationFrame(() =>
         requestAnimationFrame(async () => {
@@ -446,8 +551,9 @@ export default function HomeViewer({
         lowOn = b;
         applyVisibility();
       },
-      setStyle: (s) => {
-        if (s !== currentStyle) build(s);
+      setLook: (l) => {
+        build(l);
+        if (l.mood !== moodNow) applyMood(l.mood);
       },
       goTo,
       snapshot,
@@ -482,14 +588,19 @@ export default function HomeViewer({
   }, [scene]);
 
   useEffect(() => {
+    if (skipMode.current) {
+      skipMode.current = false;
+      return;
+    }
     api.current?.setMode(mode);
   }, [mode]);
   useEffect(() => {
     api.current?.setLow(lowWalls);
   }, [lowWalls]);
+  const lookJson = JSON.stringify({ t: look.theme, c: look.custom, r: look.rooms, m: look.mood });
   useEffect(() => {
-    api.current?.setStyle(style);
-  }, [style]);
+    api.current?.setLook(lookRef.current);
+  }, [lookJson]);
 
   // ---------- joystick ----------
   const stickBase = useRef<HTMLDivElement>(null);
@@ -555,32 +666,25 @@ export default function HomeViewer({
             {lowWalls ? "Full walls" : "Cut walls"}
           </button>
         )}
-        {canChangeStyle && (
-          <select value={style} onChange={(e) => setStyle(e.target.value as InteriorStyle)} className="rounded-full border-0 bg-paper/90 px-3 py-2 text-xs font-semibold shadow backdrop-blur" aria-label="Interior style">
-            {INTERIOR_STYLES.map((s) => (
-              <option key={s} value={s}>
-                {PALETTES[s].label}
-              </option>
-            ))}
-          </select>
-        )}
-        {canChangeStyle && onStyleSave && style !== savedStyle && (
-          <button
-            type="button"
-            disabled={saving}
-            onClick={async () => {
-              setSaving(true);
-              try {
-                await onStyleSave(style, (await api.current?.snapshot()) ?? null);
-                setSavedStyle(style);
-              } finally {
-                setSaving(false);
-              }
-            }}
-            className="rounded-full bg-brass px-3 py-2 text-xs font-semibold text-white shadow"
-          >
-            {saving ? "Saving…" : `Save ${PALETTES[style].label} look`}
-          </button>
+        {explore && (
+          <>
+            <select value={tryTheme ?? lookProp.theme} onChange={(e) => setTryTheme(e.target.value === lookProp.theme ? null : e.target.value)} className="rounded-full border-0 bg-paper/90 px-3 py-2 text-xs font-semibold shadow backdrop-blur" aria-label="Theme">
+              {!THEMES[lookProp.theme] && <option value={lookProp.theme}>{lookProp.custom?.label ?? "Designer's theme"}</option>}
+              {Object.values(THEMES).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                  {t.id === lookProp.theme ? " (designer's pick)" : ""}
+                </option>
+              ))}
+            </select>
+            <select value={tryMood ?? lookProp.mood} onChange={(e) => setTryMood(e.target.value as MoodId)} className="rounded-full border-0 bg-paper/90 px-3 py-2 text-xs font-semibold shadow backdrop-blur" aria-label="Mood">
+              {MOOD_IDS.map((m) => (
+                <option key={m} value={m}>
+                  {MOODS[m].label}
+                </option>
+              ))}
+            </select>
+          </>
         )}
         <button type="button" onClick={fullscreen} className="ml-auto rounded-full bg-paper/90 px-3 py-2 text-xs font-semibold shadow backdrop-blur hover:bg-brass-soft" title="Full screen">
           ⛶

@@ -3,17 +3,9 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createHomeFromPlan } from "../../design-actions";
+import { THEMES } from "@/lib/themes";
 
-const STYLES = [
-  ["modern", "Modern", "#c9a77c", "#3f4954"],
-  ["luxury", "Luxury", "#f2eee8", "#24414f"],
-  ["japandi", "Japandi", "#d8c3a0", "#6b7a5e"],
-  ["minimalist", "Minimalist", "#d3cfc8", "#a7a39c"],
-  ["scandinavian", "Scandinavian", "#e2cfae", "#7d9bb0"],
-  ["traditional", "Traditional", "#8a5a35", "#8c2f2a"],
-  ["industrial", "Industrial", "#9d9a94", "#7a4a2a"],
-  ["coastal", "Coastal", "#e6dccb", "#4f86a6"],
-] as const;
+const STYLES = Object.values(THEMES).map((t) => [t.id, t.label, t.floor.base, t.fabric] as const);
 
 const STEPS = ["Reading the plan…", "Tracing walls…", "Finding doors and windows…", "Measuring rooms…", "Almost there…"];
 

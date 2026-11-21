@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { clients, db, designs } from "@/db";
 import { saveFile } from "@/lib/storage";
 import { readFloorPlan } from "@/lib/floorplan-ai";
-import { INTERIOR_STYLES, normaliseScene, type HomeScene, type InteriorStyle } from "@/lib/home-scene";
+import { normaliseScene, type HomeScene } from "@/lib/home-scene";
+import { THEMES } from "@/lib/themes";
 import { newPortalToken } from "@/lib/portal";
 import { assertProjectAccess } from "./data";
 
@@ -84,7 +85,7 @@ export async function createHomeFromPlan(_: unknown, form: FormData) {
   const width = Number(form.get("width")),
     height = Number(form.get("height"));
   if (!(width > 50 && height > 50 && width < 10000 && height < 10000)) return { error: "Couldn't read the image size — try a JPG or PNG." };
-  const style = (INTERIOR_STYLES as readonly string[]).includes(String(form.get("style"))) ? (String(form.get("style")) as InteriorStyle) : "modern";
+  const style = THEMES[String(form.get("style"))] ? String(form.get("style")) : "modern";
   const hint = String(form.get("hint") ?? "").trim().slice(0, 300);
 
   const planUrl = await saveFile(plan, `designs/${project.id}`);
@@ -120,6 +121,7 @@ export async function createHomeFromPlan(_: unknown, form: FormData) {
       uploadedById: user.id,
       render: { planUrl, interiorStyle: style, snapshot: false },
       scene,
+      look: { theme: style, mood: "morning", rooms: {}, shots: [] },
     })
     .returning({ id: designs.id });
   done(project.id);
@@ -169,7 +171,7 @@ export async function saveHomeSnapshot(form: FormData) {
   if (!d?.scene) return { error: "Not a 3D home." };
   const file = form.get("file");
   const style = String(form.get("style") ?? "");
-  const styleOk = (INTERIOR_STYLES as readonly string[]).includes(style);
+  const styleOk = !!THEMES[style];
   // A shared design keeps its look; the team saves a new version for a different one.
   if (d.status !== "DRAFT" && styleOk && style !== d.render?.interiorStyle) return { error: "This design is with the client — make a new version to change the look." };
   const set: Partial<typeof designs.$inferInsert> = {};

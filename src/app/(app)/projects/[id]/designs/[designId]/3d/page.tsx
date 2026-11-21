@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
-import { db, designs } from "@/db";
+import { desc } from "drizzle-orm";
+import { db, designs, designThemes } from "@/db";
 import { can } from "@/lib/permissions";
-import { INTERIOR_STYLES, normaliseScene, type InteriorStyle } from "@/lib/home-scene";
+import { normaliseScene } from "@/lib/home-scene";
+import { cleanTheme, normaliseLook, MOODS, lookTheme } from "@/lib/themes";
 import { DesignStatusBadge } from "@/components/design-bits";
 import { assertProjectAccess } from "../../../../data";
 import { shareDesign } from "../../../../design-actions";
-import { StaffHome3D } from "./client";
+import { Studio } from "@/components/studio/studio";
+
+// Reading Pinterest pictures and mood boards with Claude can take a little while.
+export const maxDuration = 120;
 
 export default async function Design3DPage({ params, searchParams }: { params: Promise<{ id: string; designId: string }>; searchParams: Promise<{ new?: string }> }) {
   const { id, designId } = await params;
@@ -17,7 +22,8 @@ export default async function Design3DPage({ params, searchParams }: { params: P
   if (!d?.scene) notFound();
   const scene = normaliseScene(d.scene);
   const edit = can(user.role, "design");
-  const style = ((INTERIOR_STYLES as readonly string[]).includes(d.render?.interiorStyle ?? "") ? d.render!.interiorStyle : "modern") as InteriorStyle;
+  const look = normaliseLook(d.look, d.render?.interiorStyle);
+  const library = edit ? (await db.query.designThemes.findMany({ orderBy: desc(designThemes.createdAt), limit: 60 })).map((t) => cleanTheme({ ...t.theme, id: `custom:${t.id}`, label: t.name })) : [];
 
   return (
     <div className="grid gap-3">
@@ -47,7 +53,12 @@ export default async function Design3DPage({ params, searchParams }: { params: P
         </div>
       </div>
       {isNew && <p className="rounded-xl bg-olive-soft px-3 py-2 text-sm text-olive">Your 3D home is ready — {scene.rooms.length} rooms. Tap a room name to walk in.</p>}
-      <StaffHome3D projectId={project.id} designId={d.id} scene={scene} style={style} canEdit={edit && d.status === "DRAFT"} needsSnapshot={!d.render?.snapshot} />
+      <p className="text-xs text-muted">
+        {lookTheme(look).label} · {MOODS[look.mood].label}
+        {Object.keys(look.rooms).length ? ` · ${Object.keys(look.rooms).length} room${Object.keys(look.rooms).length > 1 ? "s" : ""} styled` : ""}
+        {d.status !== "DRAFT" && edit ? " · This design is with the client — saving changes makes a new draft version." : ""}
+      </p>
+      <Studio projectId={project.id} designId={d.id} scene={scene} initialLook={look} library={library} canEdit={edit} needsSnapshot={!d.render?.snapshot} />
       {scene.notes.length > 0 && (
         <details className="text-sm text-muted">
           <summary className="cursor-pointer font-semibold">What the plan reader assumed ({scene.notes.length})</summary>

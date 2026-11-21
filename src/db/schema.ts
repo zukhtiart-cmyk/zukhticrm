@@ -1,4 +1,5 @@
 import type { HomeScene } from "../lib/home-scene";
+import type { Look, Theme } from "../lib/themes";
 import { relations } from "drizzle-orm";
 import {
   boolean,
@@ -344,6 +345,8 @@ export const designs = pgTable("designs", {
   render: jsonb("render").$type<{ planUrl?: string; interiorStyle?: string; snapshot?: boolean } | null>(),
   /** The 3D home read from the floor plan (see lib/home-scene.ts). */
   scene: jsonb("scene").$type<HomeScene | null>(),
+  /** Theme, mood, room-by-room styling and saved camera shots (see lib/themes.ts). */
+  look: jsonb("look").$type<Look | null>(),
   createdAt: created(),
 });
 
@@ -506,6 +509,17 @@ export const assistantSessions = pgTable("assistant_sessions", {
 });
 
 /** Zuki desk devices (ESP32 screens): each one is paired to one staff member and talks as them. */
+/** The firm's own design themes, e.g. made from a Pinterest mood board. Usable on any project. */
+export const designThemes = pgTable("design_themes", {
+  id: id(),
+  name: text("name").notNull(),
+  theme: jsonb("theme").$type<Theme>().notNull(),
+  /** The pictures it was made from. */
+  refs: jsonb("refs").$type<{ url: string; note?: string }[]>().notNull().default([]),
+  createdById: text("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const devices = pgTable("devices", {
   id: id(),
   name: text("name").notNull(),

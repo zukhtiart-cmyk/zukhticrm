@@ -72,18 +72,43 @@ function lamp(G: THREE.Group, M: Mats, x: number, y: number, z: number) {
 const builders: Record<Item["kind"], (G: THREE.Group, it: Item, M: Mats) => void> = {
   bed(G, { w, d, opts }, M) {
     const single = !!opts?.single;
-    B(G, w, 0.3, d, M.wood, 0, 0.05, 0, 0.02);
-    B(G, w - 0.04, 0.22, d - 0.08, M.linen, 0, 0.33, 0.02, 0.06); // mattress
-    B(G, w + 0.02, 0.06, d * 0.62, M.fabricAlt, 0, 0.53, d * 0.17, 0.03); // throw / duvet
-    B(G, w + 0.02, 0.025, 0.35, M.accent, 0, 0.585, d * 0.38, 0.01); // runner
-    B(G, w + 0.1, 1.05, 0.1, M.fabric, 0, 0.1, -d / 2 + 0.05, 0.04); // headboard
+    const style = M.kit.bed;
+    const soft = style === "tufted" || style === "channel" || style === "wingback" ? M.velvet : M.fabric;
+    if (style === "platform") {
+      B(G, w + 0.2, 0.16, d + 0.1, M.wood, 0, 0, -0.02, 0.02); // low wooden platform
+      B(G, w - 0.04, 0.22, d - 0.08, M.linen, 0, 0.16, 0.02, 0.06);
+      B(G, w + 0.2, 0.5, 0.06, M.wood, 0, 0.16, -d / 2 - 0.05, 0.02);
+    } else {
+      B(G, w, 0.26, d, M.kit.legs === "plinth" ? M.wood : soft, 0, 0.1, 0, 0.03);
+      if (M.kit.legs !== "plinth") legs(G, w, d, 0.1, M.legs, 0.08, 0.05);
+      B(G, w - 0.04, 0.22, d - 0.08, M.linen, 0, 0.34, 0.02, 0.06);
+    }
+    const top = style === "platform" ? 0.38 : 0.56;
+    B(G, w + 0.02, 0.06, d * 0.62, M.fabricAlt, 0, top - 0.03, d * 0.17, 0.03); // duvet
+    B(G, w + 0.02, 0.025, 0.35, M.accent, 0, top + 0.03, d * 0.38, 0.01); // runner
+    const hz = -d / 2 + 0.05;
+    if (style === "panel") B(G, w + 0.1, 1.05, 0.1, soft, 0, 0.1, hz, 0.04);
+    else if (style === "tufted") {
+      B(G, w + 0.12, 1.15, 0.12, soft, 0, 0.1, hz, 0.05);
+      for (let i = 0; i < Math.round(w / 0.18); i++) for (let j = 0; j < 4; j++) S(G, 0.012, M.woodDark, -w / 2 + 0.1 + i * 0.18 + (j % 2) * 0.09, 0.55 + j * 0.16, hz + 0.065).castShadow = false;
+    } else if (style === "channel") {
+      const n = Math.max(5, Math.round(w / 0.16));
+      for (let i = 0; i < n; i++) B(G, (w + 0.1) / n - 0.008, 1.1, 0.13, soft, -w / 2 - 0.05 + ((w + 0.1) / n) * (i + 0.5), 0.1, hz, 0.05);
+    } else if (style === "wingback") {
+      B(G, w + 0.1, 1.35, 0.12, soft, 0, 0.1, hz, 0.05);
+      for (const sx of [-1, 1]) B(G, 0.1, 1.2, 0.35, soft, sx * (w / 2 + 0.08), 0.1, hz + 0.12, 0.05);
+    } else if (style === "slatted") {
+      const n = Math.max(6, Math.round(w / 0.09));
+      for (let i = 0; i < n; i++) B(G, 0.05, 1.0, 0.05, M.wood, -w / 2 + (w / (n - 1)) * i, 0.1, hz, 0.01);
+      B(G, w + 0.1, 0.05, 0.08, M.wood, 0, 1.1, hz, 0.01);
+    }
     const n = single ? 1 : 2;
     for (let i = 0; i < n; i++) {
       const px = n === 1 ? 0 : (i - 0.5) * (w * 0.48);
-      const p = B(G, w / n - 0.12, 0.16, 0.38, M.linen, px, 0.55, -d / 2 + 0.35, 0.07);
-      p.rotation.x = -0.25;
+      const pl = B(G, w / n - 0.12, 0.16, 0.38, M.linen, px, top - 0.01, -d / 2 + 0.35, 0.07);
+      pl.rotation.x = -0.25;
     }
-    B(G, single ? 0.4 : 0.5, 0.14, 0.12, M.accent, 0, 0.58, -d / 2 + 0.55, 0.05).rotation.x = -0.2;
+    B(G, single ? 0.4 : 0.5, 0.14, 0.12, M.accent, 0, top + 0.02, -d / 2 + 0.55, 0.05).rotation.x = -0.2;
   },
   side_table(G, { w, d }, M) {
     B(G, w, 0.5, d, M.wood, 0, 0.05, 0, 0.02);
@@ -151,25 +176,56 @@ const builders: Record<Item["kind"], (G: THREE.Group, it: Item, M: Mats) => void
     S(G, 0.07, M.leaf, 0, 0.94, 0, 1.4, 0.8, 1.4);
   },
   sofa(G, { w, d, opts }, M) {
-    const l = !!opts?.l;
-    B(G, w, 0.12, d, M.woodDark, 0, 0.04, 0, 0.02);
-    B(G, w, 0.28, d, M.fabric, 0, 0.12, 0, 0.05); // base
-    B(G, w, 0.45, 0.22, M.fabric, 0, 0.38, -d / 2 + 0.11, 0.07); // back
-    for (const sx of [-1, 1]) B(G, 0.18, 0.28, d, M.fabric, sx * (w / 2 - 0.09), 0.38, 0, 0.07); // arms
-    const n = w > 2.2 ? 3 : 2;
-    const cw = (w - 0.36) / n;
-    for (let i = 0; i < n; i++) {
-      const x = -w / 2 + 0.18 + cw * (i + 0.5);
-      B(G, cw - 0.02, 0.14, d - 0.3, M.fabric, x, 0.4, 0.06, 0.06); // seat cushion
-      const bc = B(G, cw - 0.06, 0.4, 0.14, M.fabric, x, 0.5, -d / 2 + 0.28, 0.07);
-      bc.rotation.x = -0.12;
+    const style = M.kit.sofa;
+    const soft = style === "tufted" || style === "curved" ? M.velvet : M.fabric;
+    const seatH = style === "low" ? 0.28 : 0.4;
+    const plinth = M.kit.legs === "plinth" || style === "low";
+    if (plinth) B(G, w - 0.04, 0.06, d - 0.06, M.woodDark, 0, 0, 0, 0.01);
+    else legs(G, w - 0.1, d - 0.1, 0.12, M.legs, 0.04, 0.035);
+    const y0 = plinth ? 0.06 : 0.12;
+    B(G, w, seatH - y0 - 0.12, d, soft, 0, y0, 0, 0.05); // base
+    // back
+    if (style === "curved") {
+      const back = new THREE.Mesh(new THREE.CylinderGeometry(w / 2, w / 2, 0.42, 32, 1, false, Math.PI / 2 + 0.5, Math.PI - 1.0), soft);
+      back.scale.set(1, 1, (d * 0.55) / (w / 2));
+      back.position.set(0, seatH + 0.15, 0.1);
+      back.castShadow = true;
+      G.add(back);
+      B(G, w * 0.82, 0.42, 0.2, soft, 0, seatH - 0.06, -d / 2 + 0.12, 0.09);
+    } else {
+      const bh = style === "low" ? 0.32 : 0.45;
+      B(G, w, bh, 0.22, soft, 0, seatH - 0.02, -d / 2 + 0.11, 0.07);
+      if (style === "tufted") for (let i = 0; i < Math.round(w / 0.2); i++) for (let j = 0; j < 2; j++) S(G, 0.012, M.woodDark, -w / 2 + 0.15 + i * 0.2 + (j % 2) * 0.1, seatH + 0.12 + j * 0.15, -d / 2 + 0.225).castShadow = false;
     }
-    B(G, 0.42, 0.42, 0.12, M.fabricAlt, -w / 2 + 0.45, 0.52, -d / 2 + 0.38, 0.06).rotation.set(-0.2, 0.25, 0);
-    B(G, 0.4, 0.4, 0.12, M.accent, w / 2 - 0.45, 0.52, -d / 2 + 0.38, 0.06).rotation.set(-0.2, -0.25, 0);
-    if (l) {
-      // chaise on the right
-      B(G, 0.85, 0.3, 0.75, M.fabric, w / 2 - 0.6, 0.12, d / 2 + 0.35, 0.05);
-      B(G, 0.8, 0.14, 0.72, M.fabric, w / 2 - 0.6, 0.4, d / 2 + 0.35, 0.06);
+    // arms
+    if (style !== "low") {
+      for (const sx of [-1, 1]) {
+        if (style === "track") B(G, 0.1, 0.24, d, soft, sx * (w / 2 - 0.05), seatH - 0.02, 0, 0.02);
+        else if (style === "tufted") {
+          const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, d, 20), soft);
+          arm.rotation.x = Math.PI / 2;
+          arm.position.set(sx * (w / 2 - 0.1), seatH + 0.1, 0);
+          arm.castShadow = true;
+          G.add(arm);
+        } else B(G, 0.18, 0.28, d, soft, sx * (w / 2 - 0.09), seatH - 0.02, 0, style === "curved" ? 0.09 : 0.07);
+      }
+    }
+    const inner = style === "low" ? w - 0.04 : w - 0.36;
+    const n = w > 2.2 ? 3 : 2;
+    const cw = inner / n;
+    for (let i = 0; i < n; i++) {
+      const x = -inner / 2 + cw * (i + 0.5);
+      B(G, cw - 0.02, 0.14, d - 0.3, soft, x, seatH - 0.02, 0.06, 0.06);
+      if (style !== "curved") {
+        const bc = B(G, cw - 0.06, 0.4, 0.14, soft, x, seatH + 0.08, -d / 2 + 0.28, 0.07);
+        bc.rotation.x = -0.12;
+      }
+    }
+    B(G, 0.42, 0.42, 0.12, M.fabricAlt, -w / 2 + 0.45, seatH + 0.12, -d / 2 + 0.38, 0.06).rotation.set(-0.2, 0.25, 0);
+    B(G, 0.4, 0.4, 0.12, M.accent, w / 2 - 0.45, seatH + 0.12, -d / 2 + 0.38, 0.06).rotation.set(-0.2, -0.25, 0);
+    if (opts?.l) {
+      B(G, 0.85, seatH - 0.12, 0.75, soft, w / 2 - 0.6, 0.12, d / 2 + 0.35, 0.05);
+      B(G, 0.8, 0.14, 0.72, soft, w / 2 - 0.6, seatH, d / 2 + 0.35, 0.06);
     }
   },
   armchair(G, { w, d }, M) {
@@ -182,7 +238,7 @@ const builders: Record<Item["kind"], (G: THREE.Group, it: Item, M: Mats) => void
   coffee_table(G, { w, d }, M) {
     B(G, w, 0.04, d, M.wood, 0, 0.38, 0, 0.015);
     B(G, w - 0.12, 0.02, d - 0.12, M.woodDark, 0, 0.12, 0, 0.01);
-    legs(G, w, d, 0.38, M.metal, 0.05, 0.03);
+    legs(G, w, d, 0.38, M.legs, 0.05, 0.03);
     B(G, 0.28, 0.04, 0.2, M.accent, -0.2, 0.42, 0.02, 0.01);
     B(G, 0.24, 0.03, 0.18, M.fabricAlt, -0.2, 0.46, 0.02, 0.01);
     C(G, 0.06, 0.05, 0.15, M.ceramic, 0.25, 0.42, -0.05);
@@ -370,16 +426,20 @@ const builders: Record<Item["kind"], (G: THREE.Group, it: Item, M: Mats) => void
     G.add(glass);
   },
   panel(G, { w, opts }, M) {
+    // Feature wall behind a bed or TV: the theme's (or room's) treatment, floor to ceiling.
     const h = Number(opts?.h ?? 1.2),
       base = Number(opts?.base ?? 0);
-    const p = B(G, w, h, 0.03, opts?.fluted ? M.fluted : M.accentWall, 0, base, 0);
-    if (base + h > 1.7) p.userData.upper = true;
+    const full = M.kit.feature.treatment !== "paint" || opts?.fluted;
+    const H = full ? Math.max(h, 2.75 - base) : h;
+    const p = B(G, w, H, 0.03, M.feature, 0, base, 0);
     p.castShadow = false;
-    if (opts?.fluted) {
-      // texture scale by width
+    if (base + H > 1.7) p.userData.upper = true;
+    const tex = (M.feature as THREE.MeshStandardMaterial).map;
+    if (tex) {
+      const m = (tex.userData.metres as number) || 0.72;
       const geo = p.geometry.clone();
       const uv = geo.attributes.uv as THREE.BufferAttribute;
-      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (w / 0.72), uv.getY(i) * (h / 0.72));
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (w / m), uv.getY(i) * (H / m));
       p.geometry = geo;
     }
   },
@@ -404,18 +464,84 @@ const builders: Record<Item["kind"], (G: THREE.Group, it: Item, M: Mats) => void
   },
   pendant(G, { w, opts }, M) {
     const y = WALL_H;
-    if (opts?.linear) {
+    if (opts?.linear || M.kit.fixture === "linear") {
       for (const sx of [-1, 1]) C(G, 0.004, 0.004, 0.8, M.metal, sx * w * 0.35, y - 0.8, 0, 4);
       B(G, w * 0.85, 0.05, 0.08, M.metal, 0, y - 0.85, 0, 0.02);
       B(G, w * 0.8, 0.01, 0.05, M.light, 0, y - 0.86, 0).castShadow = false;
-    } else {
-      C(G, 0.004, 0.004, 0.75, M.metal, 0, y - 0.75, 0, 4);
-      const sh = mesh(new THREE.SphereGeometry(0.2, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.brass, 0, y - 0.95, 0);
-      G.add(sh);
-      S(G, 0.06, M.light, 0, y - 0.95, 0).castShadow = false;
+      return;
     }
+    fixture(G, M, opts?.round ? "pendant" : M.kit.fixture, y, Math.max(1, Math.round(w / 0.6)));
+  },
+  fixture(G, _it, M) {
+    fixture(G, M, M.kit.fixture, WALL_H, 1);
+  },
+  curtain(G, { w, opts }, M) {
+    // A rod at the ceiling with two drapes (open: bunched at the sides; drawn: across) and a sheer layer.
+    const top = WALL_H - 0.12;
+    const rod = C(G, 0.012, 0.012, w + 0.1, M.metal, 0, top, 0, 8);
+    rod.rotation.z = Math.PI / 2;
+    rod.position.set(0, top, 0);
+    const drawn = !!opts?.drawn;
+    const pleat = (x0: number, x1: number, mat: THREE.Material, z: number) => {
+      const n = Math.max(3, Math.round((x1 - x0) / 0.09));
+      for (let i = 0; i < n; i++) {
+        const x = x0 + ((x1 - x0) * (i + 0.5)) / n;
+        const m = mesh(new THREE.CylinderGeometry(0.045, 0.05, top - 0.02, 8), mat, x, (top - 0.02) / 2 + 0.01, z + (i % 2 ? 0.02 : -0.02));
+        m.scale.set(((x1 - x0) / n) / 0.09, 1, 0.6);
+        m.castShadow = false;
+        G.add(m);
+      }
+    };
+    if (drawn) pleat(-w / 2, w / 2, M.curtain, 0.06);
+    else {
+      pleat(-w / 2, -w / 2 + 0.32, M.curtain, 0.06);
+      pleat(w / 2 - 0.32, w / 2, M.curtain, 0.06);
+    }
+    const sheer = mesh(new THREE.PlaneGeometry(w - (drawn ? 0 : 0.5), top - 0.05), M.sheer, 0, (top - 0.05) / 2 + 0.02, -0.02, false);
+    G.add(sheer);
   },
 };
+
+function fixture(G: THREE.Group, M: Mats, style: string, y: number, count: number) {
+  for (let i = 0; i < count; i++) {
+    const x = count === 1 ? 0 : (i - (count - 1) / 2) * 0.55;
+    if (style === "chandelier") {
+      C(G, 0.006, 0.006, 0.6, M.brass, x, y - 0.6, 0, 6);
+      const ring = mesh(new THREE.TorusGeometry(0.32, 0.015, 8, 40), M.brass, x, y - 0.75, 0);
+      ring.rotation.x = Math.PI / 2;
+      G.add(ring);
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        C(G, 0.012, 0.012, 0.1, M.ceramic, x + Math.cos(a) * 0.32, y - 0.75, Math.sin(a) * 0.32, 6);
+        S(G, 0.025, M.light, x + Math.cos(a) * 0.32, y - 0.62, Math.sin(a) * 0.32).castShadow = false;
+      }
+      const ring2 = mesh(new THREE.TorusGeometry(0.18, 0.012, 8, 30), M.brass, x, y - 0.95, 0);
+      ring2.rotation.x = Math.PI / 2;
+      G.add(ring2);
+    } else if (style === "globe") {
+      for (const [dx, dy, dz] of [
+        [0, 0.7, 0],
+        [0.18, 0.55, 0.1],
+        [-0.16, 0.85, -0.08],
+      ]) {
+        C(G, 0.003, 0.003, dy, M.brass, x + dx, y - dy, dz, 4);
+        const g = S(G, 0.1, M.light, x + dx, y - dy - 0.1, dz);
+        g.castShadow = false;
+      }
+    } else if (style === "rattan") {
+      C(G, 0.004, 0.004, 0.55, M.metal, x, y - 0.55, 0, 4);
+      const shade = mesh(new THREE.SphereGeometry(0.24, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), M.rattan, x, y - 0.6, 0);
+      shade.scale.y = 0.9;
+      shade.material = M.rattan;
+      G.add(shade);
+      S(G, 0.05, M.light, x, y - 0.72, 0).castShadow = false;
+    } else {
+      C(G, 0.004, 0.004, 0.75, M.metal, x, y - 0.75, 0, 4);
+      G.add(mesh(new THREE.SphereGeometry(0.2, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.metal, x, y - 0.95, 0));
+      S(G, 0.06, M.light, x, y - 0.95, 0).castShadow = false;
+    }
+  }
+}
 
 /** Builds one placed item as a three.js group in plan space (x = plan x, z = plan y). */
 export function buildItem(it: Item, M: Mats) {

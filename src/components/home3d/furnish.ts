@@ -40,7 +40,9 @@ export type Kind =
   | "art"
   | "pendant"
   | "dresser"
-  | "bathtub";
+  | "bathtub"
+  | "curtain"
+  | "fixture";
 
 export type Item = {
   kind: Kind;
