@@ -217,6 +217,19 @@ Every 3D home opens in the **Design Studio** — the 3D view with a side panel:
 - **Save design** saves the look and a fresh picture for the design card. A design already with the client is saved as a new draft version.
 - **+ Make another option** copies the home as "Option B", "Option C"… to style differently. **Compare 3D options side by side** on the Designs tab shows them together; share the ones you like for the client to approve. In the portal the client can also try other themes and moods (without saving).
 
+## Photo-real pictures, videos and walk-throughs (MeltFlex)
+
+From the Design Studio's **Shots** tab → **✨ Make photo-real pictures** (or **✨ Photo-real** on the Designs tab):
+
+1. Each saved view shows an **instruction written from the design** — room, theme, materials and colours (in designer colour names), the room's Pinterest notes, and the mood's lighting — starting with "Turn this 3D draft into a photorealistic interior photograph. Keep the exact geometry…". Edit it if you like.
+2. Pick **Lite / Standard / Pro** detail and **1–3 variations** → **✨ Make photo-real**. Pictures arrive in about 20–60 seconds. Click one to compare it with the 3D view (drag the slider).
+3. On a picture: **🎬 Video** (4 s or 8 s camera move, a few minutes) or **🧭 Walk-through** (an explorable 3D space with a link, about a minute).
+4. **☆ Show client** on the best pictures, videos and walk-throughs; once the design is shared they appear in the client's portal under the design.
+
+Credits (MeltFlex): picture 10 (lite 8, pro 15) each, video 100 (4 s) / 150 (8 s), walk-through 30. Failed jobs are refunded by MeltFlex.
+
+Setup: `MELTFLEX_API_KEY` (from meltflexai.com/settings, plan with API access) in Vercel → Settings → Environment Variables, then redeploy. Long jobs run in the background; the page checks back every few seconds.
+
 ## Set up and deploy on Vercel
 
 1. **Import the repo** in Vercel (New Project → this repo). Framework: Next.js.

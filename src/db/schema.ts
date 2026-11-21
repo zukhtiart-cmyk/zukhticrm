@@ -509,6 +509,33 @@ export const assistantSessions = pgTable("assistant_sessions", {
 });
 
 /** Zuki desk devices (ESP32 screens): each one is paired to one staff member and talks as them. */
+/** Photo-real pictures, videos and explorable walk-throughs made from a 3D home's saved shots (MeltFlex). */
+export const designRenders = pgTable("design_renders", {
+  id: id(),
+  designId: text("design_id")
+    .notNull()
+    .references(() => designs.id, { onDelete: "cascade" }),
+  /** The saved shot it was made from (photos), or the photo it was made from (videos, walk-throughs). */
+  shotId: text("shot_id"),
+  parentId: text("parent_id"),
+  kind: text("kind").notNull(), // photo | video | world
+  status: text("status").notNull().default("working"), // working | ready | failed
+  prompt: text("prompt"),
+  /** Our 3D picture it started from. */
+  sourceUrl: text("source_url"),
+  /** The result: a stored picture, a video link, or the walk-through viewer link. */
+  url: text("url"),
+  worldId: text("world_id"),
+  poll: text("poll"),
+  error: text("error"),
+  credits: integer("credits"),
+  /** Shown to the client in the portal. */
+  chosen: boolean("chosen").notNull().default(false),
+  createdById: text("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: created(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** The firm's own design themes, e.g. made from a Pinterest mood board. Usable on any project. */
 export const designThemes = pgTable("design_themes", {
   id: id(),

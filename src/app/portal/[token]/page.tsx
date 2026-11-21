@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { db, designRenders } from "@/db";
 import { date, dateTime, money } from "@/lib/format";
 import { loadPortalProject } from "@/lib/portal-data";
 import { Badge, Empty, ProgressBar, Section } from "@/components/ui";
@@ -27,6 +29,11 @@ export default async function PortalPage({
   const { token } = await params;
   const { p } = await searchParams;
   const { client, project } = await loadPortalProject(token, p);
+  // Photo-real pictures, videos and walk-throughs the designer chose to show.
+  const designIds = project?.designs.map((d) => d.id) ?? [];
+  const shown = designIds.length
+    ? await db.query.designRenders.findMany({ where: and(inArray(designRenders.designId, designIds), eq(designRenders.chosen, true), eq(designRenders.status, "ready")), orderBy: asc(designRenders.createdAt) })
+    : [];
   const first = client.name.split(" ")[0];
 
   if (!project) {
@@ -248,6 +255,32 @@ export default async function PortalPage({
                 <DesignStatusBadge status={d.status} />
               </div>
               {d.notes && <p className="mt-1 text-sm text-muted">{d.notes}</p>}
+              {shown.some((r) => r.designId === d.id) && (
+                <div className="mt-2 grid gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    {shown
+                      .filter((r) => r.designId === d.id && r.kind === "photo" && r.url)
+                      .map((r) => (
+                        <a key={r.id} href={portalFileUrl(r.url!, token)} target="_blank">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={portalFileUrl(r.url!, token)} alt="Design picture" className="aspect-[16/10] w-full rounded-lg object-cover" />
+                        </a>
+                      ))}
+                  </div>
+                  {shown
+                    .filter((r) => r.designId === d.id && r.kind === "video" && r.url)
+                    .map((r) => (
+                      <video key={r.id} src={r.url!} controls playsInline className="w-full rounded-lg" />
+                    ))}
+                  {shown
+                    .filter((r) => r.designId === d.id && r.kind === "world" && r.url)
+                    .map((r, i) => (
+                      <a key={r.id} href={r.url!} target="_blank" className="btn-ghost w-fit px-3 py-1.5 text-xs">
+                        🧭 Explore room {i + 1} in 3D ↗
+                      </a>
+                    ))}
+                </div>
+              )}
               {d.scene && (
                 <Link
                   href={`/portal/${token}/home3d/${d.id}`}

@@ -94,6 +94,11 @@ export default async function DesignsPage({ params }: { params: Promise<{ id: st
                           Check plan
                         </Link>
                       )}
+                      {normaliseLook(latest.look).shots.length > 0 && (
+                        <Link href={`/projects/${project.id}/designs/${latest.id}/renders`} className="btn-ghost inline-flex px-3 py-1.5 text-xs">
+                          ✨ Photo-real
+                        </Link>
+                      )}
                       <span className="text-xs text-muted">
                         {normaliseSafe(latest.scene)?.rooms.length ?? 0} spaces · {lookTheme(normaliseLook(latest.look, latest.render?.interiorStyle)).label} · {MOODS[normaliseLook(latest.look).mood].label}
                         {latest.render?.planUrl && (

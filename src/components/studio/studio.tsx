@@ -461,6 +461,11 @@ export function Studio({
                   {busy === "shot" ? "Saving…" : "📷 Save this view"}
                 </button>
               </div>
+              {look.shots.length > 0 && (
+                <a href={`/projects/${projectId}/designs/${designId}/renders`} onClick={(e) => dirty && !confirm("You have unsaved changes in the studio. Leave anyway?") && e.preventDefault()} className="btn-primary py-2 text-center text-sm">
+                  ✨ Make photo-real pictures →
+                </a>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 {look.shots.map((s) => (
                   <div key={s.id} className="group relative overflow-hidden rounded-lg border border-line bg-paper">
