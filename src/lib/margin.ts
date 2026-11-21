@@ -1,19 +1,23 @@
 import "server-only";
 import { eq } from "drizzle-orm";
-import { boqItems, db, orders } from "@/db";
+import { boqItems, db, orders, projects } from "@/db";
 import { round2 } from "./format";
+import { normaliseSetup, quoteTotals } from "./quote-setup";
 
 /**
  * Project margin in the project's currency (before tax).
  * Sell = BOQ sell prices. Cost = actual purchase-order cost where an item has been ordered
  * (converted at the rate fixed on the PO), otherwise the BOQ's estimated cost.
+ * When the quote shows a round-figure total (or prices include GST), sell is the amount actually quoted before GST.
  */
 export async function projectMargin(projectId: string) {
-  const [items, pos] = await Promise.all([
+  const [items, pos, project] = await Promise.all([
     db.select().from(boqItems).where(eq(boqItems.projectId, projectId)),
     db.select().from(orders).where(eq(orders.projectId, projectId)),
+    db.query.projects.findFirst({ where: eq(projects.id, projectId), columns: { quoteSetup: true }, with: { office: { columns: { taxRate: true } } } }),
   ]);
-  const sell = items.reduce((a, i) => a + i.qty * i.unitPrice, 0);
+  const sum = items.reduce((a, i) => a + i.qty * i.unitPrice, 0);
+  const sell = project ? quoteTotals(sum, normaliseSetup(project.quoteSetup), project.office.taxRate).subtotal : sum;
   const estimated = items.reduce((a, i) => a + i.qty * i.unitCost, 0);
   const poCost = (o: (typeof pos)[number]) => (o.qty ?? 0) * (o.unitCost ?? 0) * (o.fxRate ?? 1);
   let actual = 0;

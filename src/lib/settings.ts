@@ -1,6 +1,7 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { db, settings } from "@/db";
+import { DEFAULT_NOTES, type QuoteNotes } from "./quote-setup";
 
 /** 1 unit of each currency = this many INR. Edited by the owner on the Rates page. */
 export type FxRates = { asOf: string; perINR: Record<string, number> };
@@ -13,12 +14,15 @@ export type AppSettings = {
   weeklySummary: boolean;
   /** Evening operations summary to owners/admins on WhatsApp */
   dailySummary: boolean;
+  /** Company default notes printed after a quote's total (material rates, brands, exclusions, packages). */
+  quoteNotes: QuoteNotes;
 };
 
 const DEFAULTS: AppSettings = {
   whatsappMode: "approve",
   weeklySummary: true,
   dailySummary: true,
+  quoteNotes: DEFAULT_NOTES,
   // Starting values only — check and update them on the Rates page.
   fxRates: { asOf: "not set", perINR: { INR: 1, AED: 23, CNY: 12, USD: 85, EUR: 92 } },
 };

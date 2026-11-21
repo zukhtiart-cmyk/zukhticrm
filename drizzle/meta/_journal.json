@@ -92,6 +92,13 @@
       "when": 1795253755603,
       "tag": "0012_design_renders",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795255228972,
+      "tag": "0013_quote_setup",
+      "breakpoints": true
     }
   ]
 }

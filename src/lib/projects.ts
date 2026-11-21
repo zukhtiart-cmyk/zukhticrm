@@ -2,6 +2,13 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { db, milestones, projects, stages, boqItems } from "@/db";
 import { DEFAULT_MILESTONES, DEFAULT_STAGES } from "./defaults";
 import { round2 } from "./format";
+import { normaliseSetup, quoteTotals } from "./quote-setup";
+
+/** The contract total: BOQ sum (or the round figure quoted) with GST as the quote setup says. */
+export function contractTotal(items: { qty: number; unitPrice: number }[], quoteSetup: unknown, taxRate: number) {
+  const sum = items.reduce((a, i) => a + i.qty * i.unitPrice, 0);
+  return quoteTotals(sum, normaliseSetup(quoteSetup), taxRate).total;
+}
 
 type Db = typeof db;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -45,8 +52,8 @@ export async function recomputeProjectProgress(tx: Db | Tx, projectId: string) {
 /** Contract value = BOQ sell total incl. tax; milestone amounts follow their percentages. */
 export async function syncMilestoneAmounts(tx: Db | Tx, projectId: string, taxRate: number) {
   const items = await tx.select().from(boqItems).where(eq(boqItems.projectId, projectId));
-  const subtotal = items.reduce((a, i) => a + i.qty * i.unitPrice, 0);
-  const total = round2(subtotal * (1 + taxRate / 100));
+  const [p] = await tx.select({ quoteSetup: projects.quoteSetup }).from(projects).where(eq(projects.id, projectId));
+  const total = contractTotal(items, p?.quoteSetup, taxRate);
   const ms = await tx.select().from(milestones).where(eq(milestones.projectId, projectId));
   for (const m of ms) {
     if (m.status === "PAID") continue;

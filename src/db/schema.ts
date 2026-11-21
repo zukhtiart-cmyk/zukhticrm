@@ -140,6 +140,8 @@ export const projects = pgTable("projects", {
   amcDueAt: timestamp("amc_due_at", { withTimezone: true }),
   amcRemindedAt: timestamp("amc_reminded_at", { withTimezone: true }),
   careNotes: text("care_notes"),
+  /** How the quotation is presented (price style, GST, round total, room sizes, notes) — see lib/quote-setup. */
+  quoteSetup: jsonb("quote_setup").$type<Record<string, unknown>>(),
   createdAt: created(),
 });
 
@@ -199,6 +201,16 @@ export const rateItems = pgTable("rate_items", {
   cost: money("cost").notNull(),
   price: money("price").notNull(),
   currency: text("currency").notNull().default("INR"),
+  /** Heading on the quote, e.g. "WARDROBE"; the full spec text goes in spec. */
+  title: text("title"),
+  spec: text("spec"),
+  /** Room types this item is offered for when building a BOQ from a floor plan (empty = any). */
+  roomTypes: jsonb("room_types").$type<string[]>(),
+  /** How the quantity is worked out from the plan — see lib/boq-library. */
+  qtyRule: text("qty_rule"),
+  /** Ticked by default when building from a plan. */
+  preselect: boolean("preselect").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
 });
 
 export const boqItems = pgTable("boq_items", {
@@ -213,10 +225,16 @@ export const boqItems = pgTable("boq_items", {
   unitCost: money("unit_cost").notNull(),
   unitPrice: money("unit_price").notNull(),
   rateItemId: text("rate_item_id").references(() => rateItems.id, { onDelete: "set null" }),
+  /** Heading on the quote ("WARDROBE"); description holds the full work text. */
+  title: text("title"),
+  /** Size shown after the description, e.g. 7' x 9'. */
+  size: text("size"),
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: created(),
 });
 
-export type QuoteLine = { room: string; description: string; unit: string; qty: number; unitPrice: number; amount: number };
+export type QuoteLine = { room: string; description: string; unit: string; qty: number; unitPrice: number; amount: number; title?: string | null; size?: string | null };
+export type QuoteMeta = { title?: string; roomSizes?: Record<string, string>; notes?: Record<string, unknown>; taxMode?: string; sum?: number; amount?: number };
 
 export const quotes = pgTable(
   "quotes",
@@ -234,6 +252,9 @@ export const quotes = pgTable(
     tax: money("tax").notNull(),
     total: money("total").notNull(),
     lines: jsonb("lines").$type<QuoteLine[]>().notNull(),
+    /** combined | rooms | itemised — how prices show on this quote. Old quotes: itemised. */
+    mode: text("mode").notNull().default("itemised"),
+    meta: jsonb("meta").$type<QuoteMeta>(),
     createdAt: created(),
   },
   (t) => [uniqueIndex("quotes_project_version").on(t.projectId, t.version)],

@@ -3,6 +3,7 @@ import { can } from "@/lib/permissions";
 import { date, dateInput, money, round2 } from "@/lib/format";
 import { Empty, Section, StatusBadge } from "@/components/ui";
 import { loadProject } from "../../data";
+import { contractTotal } from "@/lib/projects";
 import Link from "next/link";
 import { addMilestone, createInvoice, recordPayment, undoPayment, updateMilestone } from "../../money-actions";
 
@@ -12,7 +13,7 @@ export default async function PaymentsPage({ params }: { params: Promise<{ id: s
   if (!can(user.role, "payments") && !can(user.role, "boq")) notFound();
   const edit = can(user.role, "payments");
   const cur = project.office.currency;
-  const contract = round2(project.boqItems.reduce((a, i) => a + i.qty * i.unitPrice, 0) * (1 + project.office.taxRate / 100));
+  const contract = contractTotal(project.boqItems, project.quoteSetup, project.office.taxRate);
   const paid = project.milestones.reduce((a, m) => a + (m.status === "PAID" ? (m.paidAmount ?? m.amount) : 0), 0);
   const totalPct = project.milestones.reduce((a, m) => a + m.percent, 0);
 

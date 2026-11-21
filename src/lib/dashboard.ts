@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gte, ne } from "drizzle-orm";
 import { db, leads, milestones, projects, quotes, siteUpdates, stages } from "@/db";
 import { convert } from "./fx";
 import { projectMargin } from "./margin";
+import { contractTotal } from "./projects";
 import { projectCosts } from "./site-costs";
 import { getSettings } from "./settings";
 
@@ -47,7 +48,7 @@ export async function dashboardData(officeId?: string) {
   for (const p of live) {
     const cur = p.office.currency;
     const [m, costs] = await Promise.all([projectMargin(p.id), projectCosts(p.id)]);
-    const contract = m.sell * (1 + p.office.taxRate / 100);
+    const contract = contractTotal(p.boqItems, p.quoteSetup, p.office.taxRate);
     const collected = p.milestones.filter((x) => x.status === "PAID").reduce((a, x) => a + (x.paidAmount ?? x.amount), 0);
     const dueNow = p.milestones
       .filter((x) => x.status !== "PAID" && (!x.dueStage || x.dueStage.status !== "NOT_STARTED"))

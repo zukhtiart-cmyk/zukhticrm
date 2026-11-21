@@ -62,7 +62,8 @@ export async function addDraftLines(projectId: string, lines: unknown): Promise<
       return {
         projectId: project.id,
         room: l.room,
-        description: l.description,
+        title: rate?.title ?? null,
+        description: rate?.title && rate.spec ? rate.spec : l.description,
         unit: l.unit || rate?.unit || "nos",
         qty: l.qty,
         unitCost: rate?.cost ?? 0,

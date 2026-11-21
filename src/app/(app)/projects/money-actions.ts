@@ -6,6 +6,9 @@ import { redirect } from "next/navigation";
 import { boqItems, db, milestones, quotes, quoteStatusEnum, rateItems, type QuoteLine } from "@/db";
 import { round2 } from "@/lib/format";
 import { syncMilestoneAmounts } from "@/lib/projects";
+import { normaliseSetup, quoteTotals } from "@/lib/quote-setup";
+import { orderedRooms, sortItems } from "@/lib/boq-order";
+import { getSettings } from "@/lib/settings";
 import { z } from "zod";
 import { assertProjectAccess } from "./data";
 
@@ -21,11 +24,17 @@ export async function addBoqItem(form: FormData) {
   const { project } = await assertProjectAccess(String(form.get("projectId")), "boq");
   const rateId = String(form.get("rateItemId") ?? "");
   const rate = rateId ? await db.query.rateItems.findFirst({ where: eq(rateItems.id, rateId) }) : null;
-  const description = String(form.get("description") ?? "").trim() || rate?.name;
+  const title = String(form.get("title") ?? "").trim() || rate?.title || null;
+  const description = String(form.get("description") ?? "").trim() || rate?.spec || rate?.name || title;
   if (!description) return;
+  const room = String(form.get("room") ?? "").trim() || "General";
+  const [{ n }] = await db.select({ n: sql<number>`coalesce(max(${boqItems.sortOrder}), 0)::int` }).from(boqItems).where(and(eq(boqItems.projectId, project.id), eq(boqItems.room, room)));
   await db.insert(boqItems).values({
     projectId: project.id,
-    room: String(form.get("room") ?? "").trim() || "General",
+    room,
+    title,
+    size: String(form.get("size") ?? "").trim() || null,
+    sortOrder: n + 1,
     description,
     unit: String(form.get("unit") ?? "").trim() || rate?.unit || "nos",
     qty: num(form.get("qty")) || 1,
@@ -43,6 +52,8 @@ export async function updateBoqItem(form: FormData) {
     .update(boqItems)
     .set({
       room: String(form.get("room") ?? "").trim() || "General",
+      ...(form.has("title") ? { title: String(form.get("title") ?? "").trim() || null } : {}),
+      ...(form.has("size") ? { size: String(form.get("size") ?? "").trim() || null } : {}),
       description: String(form.get("description") ?? "").trim(),
       unit: String(form.get("unit") ?? "").trim(),
       qty: num(form.get("qty")),
@@ -63,16 +74,28 @@ export async function deleteBoqItem(form: FormData) {
 
 // ---------- Quotes ----------
 
-/** Freezes the current BOQ (sell prices only) as the next quote version. */
+/** Freezes the current BOQ (sell prices only) as the next quote version, in the project's quote style. */
 export async function createQuote(form: FormData) {
   const { project } = await assertProjectAccess(String(form.get("projectId")), "boq");
   const items = await db.select().from(boqItems).where(eq(boqItems.projectId, project.id));
   if (!items.length) return;
-  const lines: QuoteLine[] = items
-    .sort((a, b) => a.room.localeCompare(b.room))
-    .map((i) => ({ room: i.room, description: i.description, unit: i.unit, qty: i.qty, unitPrice: i.unitPrice, amount: round2(i.qty * i.unitPrice) }));
-  const subtotal = round2(lines.reduce((a, l) => a + l.amount, 0));
-  const tax = round2((subtotal * project.office.taxRate) / 100);
+  const { quoteNotes } = await getSettings();
+  const setup = normaliseSetup(project.quoteSetup, quoteNotes);
+  const roomList = orderedRooms(items, setup.roomOrder);
+  const lines: QuoteLine[] = roomList.flatMap((room) =>
+    sortItems(items.filter((i) => i.room === room)).map((i) => ({
+      room: i.room,
+      title: i.title,
+      size: i.size,
+      description: i.description,
+      unit: i.unit,
+      qty: i.qty,
+      unitPrice: i.unitPrice,
+      amount: round2(i.qty * i.unitPrice),
+    })),
+  );
+  const sum = round2(lines.reduce((a, l) => a + l.amount, 0));
+  const t = quoteTotals(sum, setup, project.office.taxRate);
   const last = await db.query.quotes.findFirst({ where: eq(quotes.projectId, project.id), orderBy: desc(quotes.version) });
   const [quote] = await db
     .insert(quotes)
@@ -82,10 +105,12 @@ export async function createQuote(form: FormData) {
       currency: project.office.currency,
       taxLabel: project.office.taxLabel,
       taxRate: project.office.taxRate,
-      subtotal,
-      tax,
-      total: round2(subtotal + tax),
+      subtotal: t.subtotal,
+      tax: t.tax,
+      total: t.total,
       lines,
+      mode: setup.mode,
+      meta: { title: setup.title, roomSizes: setup.roomSizes, notes: setup.notes, taxMode: setup.taxMode, sum: t.sum, amount: t.amount },
     })
     .returning();
   redirect(`/projects/${project.id}/quote/${quote.id}`);
