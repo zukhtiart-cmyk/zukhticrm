@@ -189,11 +189,12 @@ How it behaves:
 
 Each project's **Designs** tab has a **Floor plan → 3D home** panel. No outside 3D service: Claude traces the plan, you check it, and the CRM builds the home in 3D in the browser.
 
-1. **Read plan.** Upload the floor plan (JPG, PNG, WebP or PDF — the first PDF page is used) and pick an interior style. Claude traces every wall (full, half, glass partition, balcony railing), each door, archway, sliding door and window, the room names, and the scale from a labelled dimension. Takes about 30–90 seconds.
+1. **Read plan.** Upload the floor plan (JPG, PNG, WebP or PDF — the first PDF page is used) and pick an interior style. Claude traces every wall (full, half, glass partition, balcony railing), each door, archway, sliding door and window, the room names, the scale from a labelled dimension, and **every piece of furniture drawn on the plan** (bed, wardrobe, dressing table, sofa, TV unit, dining table, kitchen platform with sink/hob/fridge, washing machine, WC, basin, shower…) with its position, size and which way it faces. Takes about 30–90 seconds.
 2. **Check plan.** Your plan shows behind Claude's tracing. The CRM first lines the walls up with the dark wall lines in the picture (and measures their thickness). Then fix anything wrong:
    - **Select** a wall → change it to full / half / glass / railing, **Remove wall (make it open)** for open areas, split it, or type its length and thickness. Drag a wall or its end dots to move them.
    - **Wall** draws new walls (clicks snap to wall ends and stay straight). **Door / Window / Archway / Sliding** add openings by clicking on a wall; drag them along the wall; tick **Main entrance** on the front door.
    - **Room** marks a room's floor; name it and set its type (the type decides the furniture).
+   - **Furniture** — select a piece to turn it, resize it, change its type, duplicate or remove it; drag to move. The thick edge with the arrow is its front. Add missing pieces with the Furniture tool. Rooms with no furniture get furnished automatically.
    - **Scale** — click both ends of a dimension you know and type it (12'6", 3.8 m, 3800).
    - Undo / redo, zoom, pan, and a slider to fade the plan picture.
 3. **Save & build 3D.** The 3D viewer opens:
@@ -202,7 +203,7 @@ Each project's **Designs** tab has a **Floor plan → 3D home** panel. No outsid
    - Change the style live and **Save the look** while it's a draft.
 4. **Share with client** as usual; they can walk through it in the portal. **Edit plan** is always available: editing a design that's already with the client saves a new draft version.
 
-Uses `ANTHROPIC_API_KEY` (already set for Zuki). Optional: `ANTHROPIC_PLAN_MODEL` to choose the Claude model for plan reading. It's a concept 3D model, not a photoreal render; furniture is placed automatically against real walls (open sides are left open).
+Uses `ANTHROPIC_API_KEY` (already set for Zuki). Optional: `ANTHROPIC_PLAN_MODEL` to choose the Claude model for plan reading. It's a concept 3D model, not a photoreal render. Furniture drawn on the plan is built where it's drawn (pushed flat against the wall behind it); rooms with nothing drawn are furnished automatically against real walls. Service shafts stay empty.
 
 ## Set up and deploy on Vercel
 

@@ -37,9 +37,14 @@ const TOOL: Anthropic.Messages.Tool = {
           required: ["name", "type", "x1", "y1", "x2", "y2"],
         },
       },
+      furniture: {
+        type: "string",
+        description:
+          "Every piece of furniture and fixture DRAWN on the plan, ONE PER LINE, as: kind,x1,y1,x2,y2,F[,extra] — x1,y1,x2,y2 = the piece's bounding box exactly as drawn; F = the way its FRONT faces on the image: N (up), S (down), E (right) or W (left). Front = foot end of a bed, door side of a wardrobe, the side you sit facing on a sofa/chair, screen side of a TV unit, the side you stand at for a counter/sink/hob/basin, the bowl end of a WC. kind: bed, wardrobe, dresser, side_table, tv_unit, sofa, armchair, coffee_table, dining_set (extra = number of chairs; box = TABLE only), counter (each straight kitchen/utility platform run separately), sink, hob, fridge, washer, wc, vanity (wash basin), shower, bathtub, desk, bookshelf, shoe_cabinet, console, sideboard, puja, plant. An L-shaped sofa = two sofa lines (the long part and the short part). Example: bed,700,180,860,420,W",
+      },
       notes: { type: "array", items: { type: "string" }, description: "Short notes on anything unclear or assumed." },
     },
-    required: ["image_width_m", "walls", "openings", "rooms", "notes"],
+    required: ["image_width_m", "walls", "openings", "rooms", "furniture", "notes"],
   },
 };
 
@@ -54,7 +59,9 @@ Coordinates: thousandths of the image — x from 0 (left edge of the image) to 1
    - exterior: true for the outer walls of the home.
 3. OPENINGS. Doors (a quarter-circle swing), sliding doors (overlapping thin panels), archways/plain gaps in a wall, and windows (thin double/triple lines in an outer wall). Give the centre point, width in metres, and the index of the wall it is on.
 4. ROOMS. Each label on the plan becomes a room rectangle covering its floor, with the closest type (a hall with sofa and dining = living_dining; toilet/bath/washroom = bathroom; WC without shower = powder; dress = store).
-Ignore furniture symbols, text, dimension lines and the north arrow when tracing walls.`;
+   Service shafts, ducts and cut-outs (often crossed with an X) are type shaft.
+5. FURNITURE. Trace every piece of furniture and every fixture that is drawn (beds, wardrobes, sofas, TV units, dining tables, kitchen platforms with sink/hob/fridge, washing machines, WCs, basins, showers…) with its exact drawn bounding box and which way its front faces. Use sizes written next to a piece (e.g. 6'-1" x 2') to check the box. Don't invent furniture that isn't drawn.
+Ignore furniture, text, dimension lines and the north arrow when tracing WALLS — wardrobes and counters are furniture, not walls.`;
 
 /** Reads a floor plan image with Claude and returns the 3D scene, ready for checking. */
 export async function readFloorPlan(img: { data: string; mediaType: string; width: number; height: number }, opts: { hint?: string; underlayUrl?: string } = {}): Promise<HomeScene> {

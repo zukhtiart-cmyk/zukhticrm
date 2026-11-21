@@ -1,4 +1,4 @@
-import { alignRooms, along, axisOf, project, type HomeScene, type Pt, type Wall } from "@/lib/home-scene";
+import { alignRooms, along, axisOf, project, snapFurniture, type HomeScene, type Pt, type Wall } from "@/lib/home-scene";
 
 /**
  * Lines walls up with the plan picture: each straight wall slides (a little) onto the band of dark pixels
@@ -21,8 +21,13 @@ export function snapToPlan(scene: HomeScene, img: HTMLImageElement): { scene: Ho
   const px = g.getImageData(0, 0, W, H).data;
   const dark = new Uint8Array(W * H);
   for (let i = 0, j = 0; i < px.length; i += 4, j++) {
-    const lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-    dark[j] = lum < 110 ? 1 : 0;
+    // Walls are drawn black or grey-filled; coloured marks (red dimensions, blue windows) are ignored.
+    const r = px[i],
+      gg = px[i + 1],
+      b = px[i + 2];
+    const lum = 0.299 * r + 0.587 * gg + 0.114 * b;
+    const chroma = Math.max(r, gg, b) - Math.min(r, gg, b);
+    dark[j] = lum < 200 && chroma < 45 ? 1 : 0;
   }
   const mpp = scene.underlay.w / W; // metres per pixel
   const isDark = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && dark[y * W + x] === 1;
@@ -63,18 +68,19 @@ export function snapToPlan(scene: HomeScene, img: HTMLImageElement): { scene: Ho
       for (const s of samples) if (horiz ? isDark(s, c0 + d) : isDark(c0 + d, s)) hit++;
       score.push(hit / samples.length);
     }
-    const best = Math.max(...score);
-    if (best < 0.55) continue; // no clear wall line near — leave it
-    // The plateau of dark rows closest to where the wall was = the drawn wall band.
-    let bi = -1,
-      bd = Infinity;
-    score.forEach((v, i) => {
-      if (v >= best * 0.85 && Math.abs(i - R) < bd) (bd = Math.abs(i - R)), (bi = i);
-    });
-    let s0 = bi,
-      s1 = bi;
-    while (s0 > 0 && score[s0 - 1] >= best * 0.6) s0--;
-    while (s1 < score.length - 1 && score[s1 + 1] >= best * 0.6) s1++;
+    // Bands of rows that are mostly dark along the wall. A real wall is a solid band (thick);
+    // thin lines are furniture, hatching or dimension lines, so they're skipped.
+    const minPx = Math.max(3, Math.round(0.06 / mpp));
+    const bands: [number, number][] = [];
+    for (let i = 0; i < score.length; i++) {
+      if (score[i] < 0.5) continue;
+      let j = i;
+      while (j + 1 < score.length && score[j + 1] >= 0.5) j++;
+      if (j - i + 1 >= minPx) bands.push([i, j]);
+      i = j;
+    }
+    if (!bands.length) continue; // no clear wall band near — leave it
+    const [s0, s1] = bands.reduce((p, q) => (Math.abs((q[0] + q[1]) / 2 - R) < Math.abs((p[0] + p[1]) / 2 - R) ? q : p));
     const centre = ((c0 - R + (s0 + s1) / 2) + 0.5) * mpp;
     const thick = (s1 - s0 + 1) * mpp;
     if (Math.abs(centre - at) > 0.01) moved++;
@@ -124,5 +130,5 @@ export function snapToPlan(scene: HomeScene, img: HTMLImageElement): { scene: Ho
     const p = opAbs.get(o.id);
     return p ? { ...o, at: +project(w, p).at.toFixed(3) } : o;
   });
-  return { scene: alignRooms({ ...scene, walls, openings, snapped: true }), moved };
+  return { scene: snapFurniture(alignRooms({ ...scene, walls, openings, snapped: true })), moved };
 }

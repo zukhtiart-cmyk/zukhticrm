@@ -26,6 +26,7 @@ export const ROOM_TYPES = [
   "puja",
   "utility",
   "store",
+  "shaft",
   "other",
 ] as const;
 export type RoomType = (typeof ROOM_TYPES)[number];
@@ -48,6 +49,7 @@ export const ROOM_LABELS: Record<RoomType, string> = {
   puja: "Puja",
   utility: "Utility",
   store: "Store",
+  shaft: "Shaft / duct",
   other: "Other",
 };
 
@@ -65,11 +67,105 @@ export type WallOpening = { id: string; wall: string; at: number; width: number;
 export type SceneRoom = { id: string; name: string; type: RoomType; x: number; y: number; w: number; d: number };
 export type Box = { x0: number; y0: number; x1: number; y1: number };
 
+/** Furniture as drawn on the plan. */
+export const PLAN_KINDS = [
+  "bed",
+  "wardrobe",
+  "dresser",
+  "side_table",
+  "tv_unit",
+  "sofa",
+  "armchair",
+  "coffee_table",
+  "dining_set",
+  "counter",
+  "sink",
+  "hob",
+  "fridge",
+  "washer",
+  "wc",
+  "vanity",
+  "shower",
+  "bathtub",
+  "desk",
+  "bookshelf",
+  "shoe_cabinet",
+  "console",
+  "sideboard",
+  "puja",
+  "plant",
+] as const;
+export type PlanKind = (typeof PLAN_KINDS)[number];
+export const PLAN_KIND_LABELS: Record<PlanKind, string> = {
+  bed: "Bed",
+  wardrobe: "Wardrobe",
+  dresser: "Dressing table",
+  side_table: "Side table",
+  tv_unit: "TV unit",
+  sofa: "Sofa",
+  armchair: "Armchair",
+  coffee_table: "Centre table",
+  dining_set: "Dining table",
+  counter: "Kitchen counter",
+  sink: "Sink",
+  hob: "Hob / gas stove",
+  fridge: "Fridge",
+  washer: "Washing machine",
+  wc: "WC",
+  vanity: "Wash basin",
+  shower: "Shower area",
+  bathtub: "Bathtub",
+  desk: "Study table",
+  bookshelf: "Bookshelf",
+  shoe_cabinet: "Shoe cabinet",
+  console: "Console",
+  sideboard: "Sideboard / crockery",
+  puja: "Puja unit",
+  plant: "Plant",
+};
+/** Typical size (across the front × front-to-back), used when adding a piece by hand. */
+export const PLAN_KIND_SIZE: Record<PlanKind, [number, number]> = {
+  bed: [1.6, 2.0],
+  wardrobe: [1.8, 0.6],
+  dresser: [0.9, 0.45],
+  side_table: [0.45, 0.42],
+  tv_unit: [1.8, 0.4],
+  sofa: [2.1, 0.9],
+  armchair: [0.8, 0.8],
+  coffee_table: [1.0, 0.55],
+  dining_set: [1.2, 0.8],
+  counter: [1.8, 0.6],
+  sink: [0.6, 0.6],
+  hob: [0.75, 0.6],
+  fridge: [0.7, 0.7],
+  washer: [0.6, 0.6],
+  wc: [0.42, 0.68],
+  vanity: [0.6, 0.45],
+  shower: [0.9, 0.9],
+  bathtub: [1.7, 0.75],
+  desk: [1.2, 0.6],
+  bookshelf: [1.0, 0.35],
+  shoe_cabinet: [0.9, 0.35],
+  console: [1.2, 0.35],
+  sideboard: [1.5, 0.45],
+  puja: [0.9, 0.45],
+  plant: [0.45, 0.45],
+};
+/**
+ * x, y: centre (metres). w: size across the front, d: front to back.
+ * rot: which way the front faces — 0 = down the plan (+y), π = up, π/2 = right (+x), -π/2 = left.
+ * The front is: the foot of a bed, the doors of a wardrobe, where you sit on a sofa, the screen side of a TV unit,
+ * where you stand at a counter.
+ */
+export type PlanItem = { id: string; kind: PlanKind; x: number; y: number; w: number; d: number; rot: number; seats?: number };
+
 export type HomeScene = {
   v: 2;
   walls: Wall[];
   openings: WallOpening[];
   rooms: SceneRoom[];
+  /** Furniture traced from the plan (or placed in Check plan). Rooms without any get furnished automatically. */
+  furniture?: PlanItem[];
   notes: string[];
   /** The plan picture behind the editor: drawn at (0,0) with this size in metres. */
   underlay?: { url: string; w: number; h: number };
@@ -94,6 +190,15 @@ const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : N
 const finite = (...v: number[]) => v.every(Number.isFinite);
 let seq = 0;
 export const newId = (p: string) => `${p}${Date.now().toString(36)}${(seq++).toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+
+/** Keeps rotations to the four plan directions when they're close (they almost always are). */
+export function snapRot(r: number) {
+  if (!Number.isFinite(r)) return 0;
+  const q = Math.round(r / (Math.PI / 2)) * (Math.PI / 2);
+  const n = Math.abs(r - q) < 0.09 ? q : r;
+  const w = Math.atan2(Math.sin(n), Math.cos(n));
+  return Math.round(w * 10000) / 10000;
+}
 
 export const wallLen = (w: Wall) => Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
 /** Point on a wall `at` metres from its start. */
@@ -202,6 +307,20 @@ export function normaliseScene(raw: unknown): HomeScene {
     .slice(0, 60)
     .map((r) => ({ ...r, id: uid(r.id, "r") }));
 
+  const pkinds = new Set<string>(PLAN_KINDS);
+  const furniture: PlanItem[] = (Array.isArray(o.furniture) ? o.furniture : [])
+    .map((f: Record<string, unknown>) => {
+      const kind = String(f.kind);
+      if (!pkinds.has(kind)) return null;
+      const it: PlanItem = { id: String(f.id ?? ""), kind: kind as PlanKind, x: r3(num(f.x)), y: r3(num(f.y)), w: r3(num(f.w)), d: r3(num(f.d)), rot: snapRot(num(f.rot)) };
+      if (!finite(it.x, it.y, it.w, it.d) || it.w < 0.15 || it.d < 0.15 || it.w > 8 || it.d > 8) return null;
+      if (kind === "dining_set") it.seats = Math.min(12, Math.max(2, Math.round(num(f.seats) || (it.w > 1.5 ? 6 : 4))));
+      return it;
+    })
+    .filter((f): f is PlanItem => !!f)
+    .slice(0, 150)
+    .map((f) => ({ ...f, id: uid(f.id, "f") }));
+
   if (!walls.length && !rooms.length) throw new Error("Couldn't find any walls or rooms on that plan. Try a clearer image with the walls drawn dark.");
 
   const u = o.underlay as Record<string, unknown> | undefined;
@@ -218,6 +337,7 @@ export function normaliseScene(raw: unknown): HomeScene {
     box: { x0: 0, y0: 0, x1: 0, y1: 0 },
   };
   if (underlay) scene.underlay = underlay;
+  if (furniture.length) scene.furniture = furniture;
   if (o.snapped) scene.snapped = true;
   scene.box = sceneBox(scene);
   return scene;
@@ -231,6 +351,7 @@ export type PlanReading = {
   walls?: { x1: number; y1: number; x2: number; y2: number; kind?: string; exterior?: boolean }[];
   openings?: { wall?: number; x: number; y: number; width_m?: number; type?: string; main?: boolean }[];
   rooms?: { name: string; type: string; x1: number; y1: number; x2: number; y2: number }[];
+  furniture?: { kind: string; x1: number; y1: number; x2: number; y2: number; facing: string; extra?: string }[];
   notes?: string[];
 };
 
@@ -285,14 +406,88 @@ export function sceneFromReading(rd: PlanReading, imgW: number, imgH: number, un
       b = P(Math.max(r.x1, r.x2), Math.max(r.y1, r.y2));
     return { id: `r${i}`, name: r.name, type: r.type, x: a[0], y: a[1], w: b[0] - a[0], d: b[1] - a[1] };
   });
-  return alignRooms(normaliseScene({
-    v: 2,
-    walls,
-    openings,
-    rooms,
-    notes: rd.notes ?? [],
-    underlay: underlayUrl ? { url: underlayUrl, w: imgW * mpp, h: imgH * mpp } : undefined,
-  }));
+  const furniture = (rd.furniture ?? []).flatMap((f, i) => {
+    const kind = FURNITURE_ALIASES[String(f.kind).toLowerCase()] ?? String(f.kind).toLowerCase();
+    if (!(PLAN_KINDS as readonly string[]).includes(kind)) return [];
+    const a = P(Math.min(f.x1, f.x2), Math.min(f.y1, f.y2)),
+      b = P(Math.max(f.x1, f.x2), Math.max(f.y1, f.y2));
+    const bw = b[0] - a[0],
+      bh = b[1] - a[1];
+    const facing = String(f.facing ?? "S").toUpperCase()[0];
+    const rot = facing === "N" ? Math.PI : facing === "E" ? Math.PI / 2 : facing === "W" ? -Math.PI / 2 : 0;
+    const sideways = facing === "E" || facing === "W";
+    return [{ id: `f${i}`, kind, x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, w: sideways ? bh : bw, d: sideways ? bw : bh, rot, seats: kind === "dining_set" ? Number(f.extra) || undefined : undefined }];
+  });
+  return snapFurniture(
+    alignRooms(
+      normaliseScene({
+        v: 2,
+        walls,
+        openings,
+        rooms,
+        furniture,
+        notes: rd.notes ?? [],
+        underlay: underlayUrl ? { url: underlayUrl, w: imgW * mpp, h: imgH * mpp } : undefined,
+      }),
+    ),
+  );
+}
+
+const FURNITURE_ALIASES: Record<string, string> = {
+  dining_table: "dining_set",
+  dining: "dining_set",
+  dressing_table: "dresser",
+  basin: "vanity",
+  wash_basin: "vanity",
+  toilet: "wc",
+  stove: "hob",
+  gas_stove: "hob",
+  refrigerator: "fridge",
+  washing_machine: "washer",
+  centre_table: "coffee_table",
+  center_table: "coffee_table",
+  study_table: "desk",
+  crockery: "sideboard",
+  bath: "bathtub",
+};
+
+/** Pieces that stand with their back against a wall. */
+const WALL_BACKED = new Set<PlanKind>(["bed", "wardrobe", "dresser", "tv_unit", "counter", "sink", "hob", "fridge", "washer", "wc", "vanity", "desk", "bookshelf", "shoe_cabinet", "console", "sideboard", "puja", "side_table", "sofa", "bathtub"]);
+
+/**
+ * Pushes wall-backed furniture flat against the wall behind it (if one is within `tol` metres),
+ * so nothing floats in front of a wall or pokes through it.
+ */
+export function snapFurniture(s: HomeScene, tol = 0.35): HomeScene {
+  if (!s.furniture?.length) return s;
+  const furniture = s.furniture.map((f) => {
+    if (!WALL_BACKED.has(f.kind)) return f;
+    const fx = Math.round(Math.sin(f.rot)),
+      fy = Math.round(Math.cos(f.rot));
+    if (Math.abs(fx) + Math.abs(fy) !== 1) return f;
+    // Back edge centre, and the span the piece covers along the wall.
+    const bx = f.x - (fx * f.d) / 2,
+      by = f.y - (fy * f.d) / 2;
+    const horizWall = fy !== 0;
+    const lo = horizWall ? f.x - f.w / 2 : f.y - f.w / 2,
+      hi = horizWall ? f.x + f.w / 2 : f.y + f.w / 2;
+    let best: number | null = null,
+      bd = tol;
+    for (const w of s.walls) {
+      if (axisOf(w) !== (horizWall ? "h" : "v") || w.kind === "railing") continue;
+      const at = horizWall ? w.a[1] : w.a[0];
+      const wl = horizWall ? Math.min(w.a[0], w.b[0]) : Math.min(w.a[1], w.b[1]);
+      const wh = horizWall ? Math.max(w.a[0], w.b[0]) : Math.max(w.a[1], w.b[1]);
+      if (Math.min(hi, wh) - Math.max(lo, wl) < Math.min(0.3, (hi - lo) * 0.4)) continue;
+      // The wall's face on the piece's side.
+      const face = at + (horizWall ? fy : fx) * (w.t / 2 + 0.01);
+      const d = Math.abs(face - (horizWall ? by : bx));
+      if (d < bd) (bd = d), (best = face);
+    }
+    if (best === null) return f;
+    return horizWall ? { ...f, y: r3(best + (fy * f.d) / 2) } : { ...f, x: r3(best + (fx * f.d) / 2) };
+  });
+  return { ...s, furniture };
 }
 
 /** Moves room edges onto the nearest parallel wall (within `tol` metres), so floors meet the walls. */
@@ -323,7 +518,7 @@ export function alignRooms(s: HomeScene, tol = 0.45): HomeScene {
   return out;
 }
 
-export type RawReading = Omit<PlanReading, "walls" | "openings"> & { walls?: unknown; openings?: unknown };
+export type RawReading = Omit<PlanReading, "walls" | "openings" | "furniture"> & { walls?: unknown; openings?: unknown; furniture?: unknown };
 const KIND: Record<string, string> = { F: "full", FE: "full", H: "half", G: "glass", R: "railing" };
 const OTYPE: Record<string, string> = { D: "door", O: "opening", S: "sliding", W: "window" };
 
@@ -346,7 +541,10 @@ export function parseReading(r: RawReading): PlanReading {
   const openings = Array.isArray(r.openings)
     ? (r.openings as PlanReading["openings"])
     : lines(r.openings).map((p) => ({ wall: +p[0], x: +p[1], y: +p[2], width_m: +p[3], type: OTYPE[String(p[4] ?? "D").toUpperCase()] ?? "door", main: String(p[5] ?? "").toUpperCase() === "M" }));
-  return { ...r, walls, openings };
+  const furniture = Array.isArray(r.furniture)
+    ? (r.furniture as PlanReading["furniture"])
+    : lines(r.furniture).map((p) => ({ kind: String(p[0] ?? ""), x1: +p[1], y1: +p[2], x2: +p[3], y2: +p[4], facing: String(p[5] ?? "S"), extra: p[6] }));
+  return { ...r, walls, openings, furniture };
 }
 
 

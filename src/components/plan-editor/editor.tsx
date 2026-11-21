@@ -21,11 +21,18 @@ import {
   type Wall,
   type WallKind,
   type WallOpening,
+  PLAN_KINDS,
+  PLAN_KIND_LABELS,
+  PLAN_KIND_SIZE,
+  snapFurniture,
+  snapRot,
+  type PlanItem,
+  type PlanKind,
 } from "@/lib/home-scene";
 import { snapToPlan } from "./snap";
 
-type Tool = "select" | "wall" | "door" | "window" | "opening" | "sliding" | "room" | "scale";
-type Sel = { type: "wall" | "opening" | "room"; id: string } | null;
+type Tool = "select" | "wall" | "door" | "window" | "opening" | "sliding" | "room" | "item" | "scale";
+type Sel = { type: "wall" | "opening" | "room" | "item"; id: string } | null;
 type VB = { x: number; y: number; w: number };
 
 const KIND_STYLE: Record<WallKind, { stroke: string; dash?: string; label: string }> = {
@@ -48,6 +55,7 @@ const TOOLS: { id: Tool; label: string; hint: string }[] = [
   { id: "opening", label: "Archway", hint: "Click on a wall to add an open archway (no door shutter)." },
   { id: "sliding", label: "Sliding", hint: "Click on a wall to add a sliding door." },
   { id: "room", label: "Room", hint: "Drag a rectangle over a room's floor, then name it." },
+  { id: "item", label: "Furniture", hint: "Pick a piece, then click where it goes. Select it afterwards to rotate or resize." },
   { id: "scale", label: "Scale", hint: "Click both ends of a dimension you know (e.g. a wall marked 12'6\"), then type its real length." },
 ];
 
@@ -77,6 +85,8 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
   const [tool, setTool] = useState<Tool>("select");
   const [sel, setSel] = useState<Sel>(null);
   const [newKind, setNewKind] = useState<WallKind>("full");
+  const [newItem, setNewItem] = useState<PlanKind>("bed");
+  const [showItems, setShowItems] = useState(true);
   const [opacity, setOpacity] = useState(0.55);
   const [dirty, setDirty] = useState(false);
   const [hover, setHover] = useState<Pt | null>(null);
@@ -239,11 +249,13 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
   const setWall = (id: string, patch: Partial<Wall>) => update((s) => ({ ...s, walls: s.walls.map((w) => (w.id === id ? { ...w, ...patch } : w)) }));
   const setOpening = (id: string, patch: Partial<WallOpening>) => update((s) => ({ ...s, openings: s.openings.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
   const setRoom = (id: string, patch: Partial<SceneRoom>) => update((s) => ({ ...s, rooms: s.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
+  const setItem = (id: string, patch: Partial<PlanItem>) => update((s) => ({ ...s, furniture: (s.furniture ?? []).map((f) => (f.id === id ? { ...f, ...patch } : f)) }));
   const removeSel = () => {
     if (!sel) return;
     if (sel.type === "wall") update((s) => ({ ...s, walls: s.walls.filter((w) => w.id !== sel.id), openings: s.openings.filter((o) => o.wall !== sel.id) }));
     if (sel.type === "opening") update((s) => ({ ...s, openings: s.openings.filter((o) => o.id !== sel.id) }));
     if (sel.type === "room") update((s) => ({ ...s, rooms: s.rooms.filter((r) => r.id !== sel.id) }));
+    if (sel.type === "item") update((s) => ({ ...s, furniture: (s.furniture ?? []).filter((f) => f.id !== sel.id) }));
     setSel(null);
   };
   const splitWall = (id: string) => {
@@ -268,13 +280,14 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
     | { kind: "opening"; id: string; base: HomeScene }
     | { kind: "room"; id: string; start: Pt; orig: SceneRoom; base: HomeScene }
     | { kind: "corner"; id: string; corner: number; orig: SceneRoom; base: HomeScene }
+    | { kind: "item"; id: string; start: Pt; orig: PlanItem; base: HomeScene }
     | { kind: "draw"; start: Pt };
   const drag = useRef<Drag | null>(null);
   const moved = useRef(false);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ d: number; vb: VB; mid: Pt } | null>(null);
 
-  const onDown = (e: React.PointerEvent, target?: { type: "wall" | "opening" | "room" | "end" | "corner"; id: string; extra?: string | number }) => {
+  const onDown = (e: React.PointerEvent, target?: { type: "wall" | "opening" | "room" | "end" | "corner" | "item"; id: string; extra?: string | number }) => {
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2) {
@@ -300,6 +313,9 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
       } else if (target?.type === "opening") {
         setSel({ type: "opening", id: target.id });
         drag.current = { kind: "opening", id: target.id, base: scene };
+      } else if (target?.type === "item") {
+        setSel({ type: "item", id: target.id });
+        drag.current = { kind: "item", id: target.id, start: p, orig: (scene.furniture ?? []).find((f) => f.id === target.id)!, base: scene };
       } else if (target?.type === "room") {
         setSel({ type: "room", id: target.id });
         drag.current = { kind: "room", id: target.id, start: p, orig: scene.rooms.find((r) => r.id === target.id)!, base: scene };
@@ -362,6 +378,9 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
     } else if (D.kind === "room") {
       const r = (n: number) => Math.round(n * 100) / 100;
       setScene({ ...D.base, rooms: D.base.rooms.map((x) => (x.id === D.id ? { ...x, x: r(D.orig.x + p[0] - D.start[0]), y: r(D.orig.y + p[1] - D.start[1]) } : x)) });
+    } else if (D.kind === "item") {
+      const r = (n: number) => Math.round(n * 100) / 100;
+      setScene({ ...D.base, furniture: (D.base.furniture ?? []).map((x) => (x.id === D.id ? { ...x, x: r(D.orig.x + p[0] - D.start[0]), y: r(D.orig.y + p[1] - D.start[1]) } : x)) });
     } else if (D.kind === "corner") {
       const q = snapPoint(p);
       const o = D.orig;
@@ -424,6 +443,12 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
       const op: WallOpening = { id: newId("o"), wall: nw.w.id, at: Math.min(L - width / 2, Math.max(width / 2, nw.at)), width, type: tool };
       update((s) => ({ ...s, openings: [...s.openings, op] }));
       setSel({ type: "opening", id: op.id });
+    } else if (tool === "item") {
+      const [w, d] = PLAN_KIND_SIZE[newItem];
+      const it: PlanItem = { id: newId("f"), kind: newItem, x: Math.round(p[0] * 100) / 100, y: Math.round(p[1] * 100) / 100, w, d, rot: 0, ...(newItem === "dining_set" ? { seats: 4 } : {}) };
+      update((s) => ({ ...s, furniture: [...(s.furniture ?? []), it] }));
+      setSel({ type: "item", id: it.id });
+      setTool("select");
     } else if (tool === "scale") {
       const q = snapPoint(p);
       setScalePts((pts) => (pts.length >= 2 ? [q] : [...pts, q]));
@@ -481,6 +506,7 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
         walls: s.walls.map((w) => ({ ...w, a: S(w.a), b: S(w.b) })),
         openings: s.openings.map((o) => ({ ...o, at: o.at * k })),
         rooms: s.rooms.map((r) => ({ ...r, x: r.x * k, y: r.y * k, w: r.w * k, d: r.d * k })),
+        furniture: s.furniture?.map((f) => ({ ...f, x: f.x * k, y: f.y * k, w: f.w * k, d: f.d * k })),
         underlay: s.underlay ? { ...s.underlay, w: s.underlay.w * k, h: s.underlay.h * k } : undefined,
       };
       return { ...next, box: sceneBox(next) };
@@ -496,6 +522,7 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
   const selWall = sel?.type === "wall" ? wallById.get(sel.id) : undefined;
   const selOp = sel?.type === "opening" ? scene.openings.find((o) => o.id === sel.id) : undefined;
   const selRoom = sel?.type === "room" ? scene.rooms.find((r) => r.id === sel.id) : undefined;
+  const selItem = sel?.type === "item" ? (scene.furniture ?? []).find((f) => f.id === sel.id) : undefined;
   const warnings: string[] = [];
   if (!scene.openings.some((o) => o.main)) warnings.push("No main entrance marked — select the entrance door and tick “Main entrance”.");
   if (!scene.rooms.length) warnings.push("No rooms yet — use Room to mark floors.");
@@ -504,7 +531,7 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
   const sw = (px: number) => px / pxm; // screen pixels → metres
 
   const save = async (build: boolean) => {
-    const out = alignRooms({ ...scene, box: sceneBox(scene) }, 0.2);
+    const out = snapFurniture(alignRooms({ ...scene, box: sceneBox(scene) }, 0.2), 0.12);
     await onSave(out, build);
     setDirty(false);
   };
@@ -538,6 +565,15 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
         </div>
         <p className="text-xs text-muted">
           {TOOLS.find((t) => t.id === tool)?.hint}
+          {tool === "item" && (
+            <select value={newItem} onChange={(e) => setNewItem(e.target.value as PlanKind)} className="ml-2 rounded-full border border-line bg-paper px-2 py-0.5 text-xs font-semibold">
+              {PLAN_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {PLAN_KIND_LABELS[k]}
+                </option>
+              ))}
+            </select>
+          )}
           {tool === "wall" && (
             <span className="ml-2 inline-flex gap-1">
               {(Object.keys(KIND_STYLE) as WallKind[]).map((k) => (
@@ -591,6 +627,35 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
                 </g>
               );
             })}
+            {/* furniture */}
+            {showItems &&
+              (scene.furniture ?? []).map((f) => {
+                const on = sel?.type === "item" && sel.id === f.id;
+                return (
+                  <g
+                    key={f.id}
+                    data-item={f.id}
+                    transform={`translate(${f.x} ${f.y}) rotate(${(-f.rot * 180) / Math.PI})`}
+                    onPointerDown={(e) => {
+                      if (tool !== "select") return;
+                      e.stopPropagation();
+                      onDown(e, { type: "item", id: f.id });
+                    }}
+                    style={{ cursor: tool === "select" ? "move" : undefined }}
+                  >
+                    <rect x={-f.w / 2} y={-f.d / 2} width={f.w} height={f.d} fill={on ? "rgba(79,107,58,0.35)" : "rgba(79,107,58,0.16)"} stroke={on ? "#1d1d1d" : "#4f6b3a"} strokeWidth={sw(on ? 2 : 1.2)} />
+                    {/* front edge */}
+                    <line x1={-f.w / 2} y1={f.d / 2} x2={f.w / 2} y2={f.d / 2} stroke={on ? "#1d1d1d" : "#2f4a1e"} strokeWidth={sw(on ? 4 : 3)} />
+                    <path d={`M ${-sw(6)} ${f.d / 2 - sw(1)} L 0 ${f.d / 2 + sw(7)} L ${sw(6)} ${f.d / 2 - sw(1)} Z`} fill={on ? "#1d1d1d" : "#2f4a1e"} />
+                  </g>
+                );
+              })}
+            {showItems &&
+              (scene.furniture ?? []).map((f) => (
+                <text key={`t${f.id}`} x={f.x} y={f.y + sw(4)} textAnchor="middle" fontSize={sw(10)} fontWeight={700} fill="#2f4a1e" stroke="#fff" strokeWidth={sw(2.5)} paintOrder="stroke" pointerEvents="none">
+                  {PLAN_KIND_LABELS[f.kind]}
+                </text>
+              ))}
             {/* walls */}
             {scene.walls.map((w) => {
               const st = KIND_STYLE[w.kind];
@@ -844,6 +909,56 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
               </button>
               <p className="text-[11px] text-muted">Drag it along the wall to move it.</p>
             </div>
+          ) : selItem ? (
+            <div className="grid gap-2 text-sm">
+              <p className="font-semibold">Furniture</p>
+              <select value={selItem.kind} onChange={(e) => setItem(selItem.id, { kind: e.target.value as PlanKind })} className="input" aria-label="Furniture type">
+                {PLAN_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {PLAN_KIND_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button type="button" onClick={() => setItem(selItem.id, { rot: snapRot(selItem.rot + Math.PI / 2) })} className="rounded-lg bg-white px-2 py-1.5 text-xs font-semibold ring-1 ring-line">
+                  ↺ Turn left
+                </button>
+                <button type="button" onClick={() => setItem(selItem.id, { rot: snapRot(selItem.rot - Math.PI / 2) })} className="rounded-lg bg-white px-2 py-1.5 text-xs font-semibold ring-1 ring-line">
+                  ↻ Turn right
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="grid gap-1 text-xs text-muted">
+                  Width (cm)
+                  <input type="number" min={15} max={800} value={Math.round(selItem.w * 100)} onChange={(e) => +e.target.value >= 15 && setItem(selItem.id, { w: +e.target.value / 100 })} className="input" />
+                </label>
+                <label className="grid gap-1 text-xs text-muted">
+                  Depth (cm)
+                  <input type="number" min={15} max={800} value={Math.round(selItem.d * 100)} onChange={(e) => +e.target.value >= 15 && setItem(selItem.id, { d: +e.target.value / 100 })} className="input" />
+                </label>
+              </div>
+              {selItem.kind === "dining_set" && (
+                <label className="grid gap-1 text-xs text-muted">
+                  Chairs
+                  <input type="number" min={2} max={12} value={selItem.seats ?? 4} onChange={(e) => setItem(selItem.id, { seats: Math.min(12, Math.max(2, +e.target.value)) })} className="input" />
+                </label>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const copy = { ...selItem, id: newId("f"), x: selItem.x + 0.3, y: selItem.y + 0.3 };
+                  update((s) => ({ ...s, furniture: [...(s.furniture ?? []), copy] }));
+                  setSel({ type: "item", id: copy.id });
+                }}
+                className="rounded-lg bg-white px-2 py-1.5 text-xs font-semibold ring-1 ring-line"
+              >
+                Duplicate
+              </button>
+              <button type="button" onClick={removeSel} className="rounded-lg bg-clay-soft px-2 py-1.5 text-xs font-semibold text-clay">
+                Remove
+              </button>
+              <p className="text-[11px] text-muted">The thick edge with the arrow is the front (foot of the bed, wardrobe doors, where you sit). Drag to move.</p>
+            </div>
           ) : selRoom ? (
             <div className="grid gap-2 text-sm">
               <p className="font-semibold">Room</p>
@@ -877,10 +992,12 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
                 <li>• Open areas have no line — select it and “Remove wall”</li>
                 <li>• Doors, archways and windows are in the right places</li>
                 <li>• Rooms are named with the right type</li>
+                <li>• Furniture sits where it&apos;s drawn, facing the right way (arrow = front)</li>
               </ul>
               <p className="text-xs text-muted">
-                {scene.walls.length} walls · {scene.openings.length} doors &amp; windows · {scene.rooms.length} rooms
+                {scene.walls.length} walls · {scene.openings.length} doors &amp; windows · {scene.rooms.length} rooms · {(scene.furniture ?? []).length} furniture
               </p>
+              <p className="text-[11px] text-muted">Rooms with no furniture here get furnished automatically in 3D.</p>
             </div>
           )}
         </div>
@@ -902,6 +1019,10 @@ export default function PlanEditor({ initial, onSave, saving }: { initial: HomeS
             <button type="button" onClick={() => runSnap(scene)} className="rounded-lg bg-white px-2 py-1.5 font-semibold ring-1 ring-line hover:bg-brass-soft">
               Line walls up with the plan
             </button>
+            <label className="flex items-center gap-2 font-semibold">
+              <input type="checkbox" checked={showItems} onChange={(e) => setShowItems(e.target.checked)} />
+              Show furniture
+            </label>
           </div>
         )}
 

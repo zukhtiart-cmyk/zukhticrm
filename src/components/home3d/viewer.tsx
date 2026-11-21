@@ -155,6 +155,7 @@ export default function HomeViewer({
       built.fullWalls.visible = walk || !lowOn;
       built.lowWalls.visible = !walk && lowOn;
       built.ceilings.visible = walk;
+      for (const o of built.upper) o.visible = walk || !lowOn;
       renderer.shadowMap.needsUpdate = true;
     };
     build(initialStyle);
@@ -239,11 +240,33 @@ export default function HomeViewer({
         const inY = door.dir === "h" ? (Math.abs(door.y - r.y) < Math.abs(door.y - (r.y + r.d)) ? 0.5 : -0.5) : 0;
         px = door.x + inX;
         py = door.y + inY;
+      } else {
+        // No door (an open kitchen, say): stand just outside its most open side, looking in.
+        const cover = (horiz: boolean, line: number, lo: number, hi: number) =>
+          scene.walls.reduce((sum, w) => {
+            const wh = Math.abs(w.a[1] - w.b[1]) < 0.05,
+              wv = Math.abs(w.a[0] - w.b[0]) < 0.05;
+            if (horiz ? !wh : !wv) return sum;
+            if (Math.abs((horiz ? w.a[1] : w.a[0]) - line) > 0.3) return sum;
+            const a = horiz ? Math.min(w.a[0], w.b[0]) : Math.min(w.a[1], w.b[1]),
+              b = horiz ? Math.max(w.a[0], w.b[0]) : Math.max(w.a[1], w.b[1]);
+            return sum + Math.max(0, Math.min(hi, b) - Math.max(lo, a));
+          }, 0) / (hi - lo);
+        const sides = [
+          { c: cover(true, r.y, r.x, r.x + r.w), x: r.x + r.w / 2, y: r.y - 0.8 },
+          { c: cover(true, r.y + r.d, r.x, r.x + r.w), x: r.x + r.w / 2, y: r.y + r.d + 0.8 },
+          { c: cover(false, r.x, r.y, r.y + r.d), x: r.x - 0.8, y: r.y + r.d / 2 },
+          { c: cover(false, r.x + r.w, r.y, r.y + r.d), x: r.x + r.w + 0.8, y: r.y + r.d / 2 },
+        ].sort((a, b) => a.c - b.c);
+        if (sides[0].c < 0.7) {
+          px = sides[0].x;
+          py = sides[0].y;
+        }
       }
       const p = freeSpot(px, py);
       camera.position.set(p.x, EYE, p.y);
       yaw = Math.atan2(-(r.x + r.w / 2 - p.x), -(r.y + r.d / 2 - p.y));
-      pitch = -0.05;
+      pitch = -0.15;
       setHere(roomAt(p.x, p.y));
     };
     const startWalk = () => {

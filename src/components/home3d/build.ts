@@ -12,6 +12,8 @@ export type Built = {
   fullWalls: THREE.Group;
   lowWalls: THREE.Group;
   ceilings: THREE.Group;
+  /** Tall bits (cooker hoods, full-height feature panels) hidden in the cut-away dollhouse. */
+  upper: THREE.Object3D[];
   blockers: Blocker[];
   items: Item[];
 };
@@ -36,7 +38,7 @@ export function buildHouse(scene: HomeScene, M: Mats): Built {
 
   // Floors and ceilings per room.
   for (const r of scene.rooms) {
-    const mat = r.type === "balcony" ? M.deck : r.type === "kitchen" ? M.floor : isWet(r.type) ? M.wetFloor : M.floor;
+    const mat = r.type === "shaft" ? M.wallCap : r.type === "balcony" ? M.deck : r.type === "kitchen" ? M.floor : isWet(r.type) ? M.wetFloor : M.floor;
     const g = new THREE.PlaneGeometry(r.w, r.d);
     g.rotateX(-Math.PI / 2);
     g.translate(r.x + r.w / 2, isWet(r.type) ? 0.002 : 0, r.y + r.d / 2);
@@ -46,7 +48,7 @@ export function buildHouse(scene: HomeScene, M: Mats): Built {
     f.receiveShadow = true;
     root.add(f);
 
-    if (r.type !== "balcony") {
+    if (r.type !== "balcony" && r.type !== "shaft") {
       const cg = new THREE.PlaneGeometry(r.w, r.d);
       cg.rotateX(Math.PI / 2);
       const c = new THREE.Mesh(cg, M.ceiling);
@@ -83,7 +85,15 @@ export function buildHouse(scene: HomeScene, M: Mats): Built {
   for (const it of items) {
     const g = buildItem(it, M);
     if (it.kind === "pendant") ceilings.add(g);
-    else root.add(g);
+    else {
+      root.add(g);
+      // Anything hanging high up (wall cabinets, hoods, tall panels) is hidden in the cut-away dollhouse.
+      g.updateMatrixWorld(true);
+      const box = new THREE.Box3();
+      g.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh && box.setFromObject(o).min.y > 1.3) o.userData.upper = true;
+      });
+    }
     if (SOLID_KINDS.has(it.kind)) {
       const turned = Math.abs(Math.sin(it.rot)) > 0.5;
       const hw = (turned ? it.d : it.w) / 2,
@@ -93,7 +103,11 @@ export function buildHouse(scene: HomeScene, M: Mats): Built {
   }
 
   root.add(fullWalls, lowWalls, ceilings);
-  return { root, fullWalls, lowWalls, ceilings, blockers, items };
+  const upper: THREE.Object3D[] = [];
+  root.traverse((o) => {
+    if (o.userData.upper) upper.push(o);
+  });
+  return { root, fullWalls, lowWalls, ceilings, blockers, items, upper };
 }
 
 type Groups = { fullWalls: THREE.Group; lowWalls: THREE.Group; root: THREE.Group };

@@ -1,4 +1,4 @@
-import { axisOf, axisOpenings, type AxisOpening, type HomeScene, type SceneRoom, type Wall } from "@/lib/home-scene";
+import { axisOf, axisOpenings, type AxisOpening, type HomeScene, type PlanItem, type SceneRoom, type Wall } from "@/lib/home-scene";
 
 type Opening = AxisOpening;
 /** Furniture stands this far in from a wall's centre line (half an inside wall). */
@@ -39,7 +39,8 @@ export type Kind =
   | "panel"
   | "art"
   | "pendant"
-  | "dresser";
+  | "dresser"
+  | "bathtub";
 
 export type Item = {
   kind: Kind;
@@ -518,8 +519,88 @@ function splitLivingDining(room: SceneRoom, windows: Opening[]) {
   };
 }
 
-export function furnish(scene: HomeScene): Item[] {
+const inRect = (x: number, y: number, r: Rect, m = 0.05) => x >= r.x - m && x <= r.x + r.w + m && y >= r.y - m && y <= r.y + r.d + m;
+
+/** Turns the furniture drawn on the plan into 3D pieces, plus rugs and lights to finish the rooms. */
+function fromPlan(scene: HomeScene): { items: Item[]; rooms: Set<string> } {
+  const plan = scene.furniture ?? [];
+  const roomOf = (f: { x: number; y: number }) => scene.rooms.find((r) => inRect(f.x, f.y, r))?.name ?? "";
   const items: Item[] = [];
+  const rooms = new Set<string>();
+  // Local position of a point along a piece's front (x across, from its centre).
+  const localX = (c: PlanItem, p: { x: number; y: number }) => (p.x - c.x) * Math.cos(c.rot) - (p.y - c.y) * Math.sin(c.rot);
+  const inside = (c: PlanItem, p: PlanItem) => {
+    const lx = localX(c, p);
+    const lz = (p.x - c.x) * Math.sin(c.rot) + (p.y - c.y) * Math.cos(c.rot);
+    return Math.abs(lx) <= c.w / 2 + 0.05 && Math.abs(lz) <= c.d / 2 + 0.25;
+  };
+  const counters = plan.filter((f) => f.kind === "counter");
+  const used = new Set<string>();
+  for (const f of plan) {
+    const room = roomOf(f);
+    if (room) rooms.add(room);
+    const base = { room, x: f.x, y: f.y, w: f.w, d: f.d, rot: f.rot };
+    switch (f.kind) {
+      case "sink":
+      case "hob": {
+        const host = counters.find((c) => inside(c, f));
+        if (host) {
+          used.add(f.id);
+          break;
+        }
+        items.push({ ...base, kind: "counter", opts: { [f.kind === "sink" ? "sinkAt" : "hobAt"]: 0, hood: f.kind === "hob" } });
+        break;
+      }
+      case "counter": {
+        const opts: Item["opts"] = {};
+        for (const p of plan) {
+          if ((p.kind === "sink" || p.kind === "hob") && inside(f, p)) {
+            opts[p.kind === "sink" ? "sinkAt" : "hobAt"] = Math.round(localX(f, p) * 100) / 100;
+            if (p.kind === "hob") opts.hood = true;
+          }
+        }
+        items.push({ ...base, kind: "counter", opts });
+        break;
+      }
+      case "dining_set": {
+        const seats = f.seats ?? (f.w > 1.5 ? 6 : 4);
+        items.push({ ...base, kind: "dining_set", w: f.w + 0.2, d: f.d + 0.9, opts: { seats, tw: f.w, td: f.d } });
+        items.push({ kind: "pendant", room, x: f.x, y: f.y, w: f.w * 0.8, d: 0.3, rot: f.rot, opts: { linear: f.w > 1.4 } });
+        items.push({ kind: "rug", room, x: f.x, y: f.y, w: f.w + 1.2, d: f.d + 1.4, rot: f.rot });
+        break;
+      }
+      case "bed": {
+        items.push({ ...base, kind: "bed", opts: { single: f.w < 1.3 } });
+        // feature panel behind the headboard, rug at the foot
+        const bx = f.x - (Math.sin(f.rot) * f.d) / 2,
+          by = f.y - (Math.cos(f.rot) * f.d) / 2;
+        items.push({ kind: "panel", room, x: bx + Math.sin(f.rot) * 0.015, y: by + Math.cos(f.rot) * 0.015, w: f.w + 0.3, d: 0.03, rot: f.rot, opts: { h: 1.25, base: 0.35 } });
+        items.push({ kind: "rug", room, x: f.x + Math.sin(f.rot) * 0.55, y: f.y + Math.cos(f.rot) * 0.55, w: f.w + 0.9, d: 1.7, rot: f.rot });
+        break;
+      }
+      case "tv_unit": {
+        items.push({ ...base, kind: "tv_unit" });
+        const bx = f.x - (Math.sin(f.rot) * f.d) / 2,
+          by = f.y - (Math.cos(f.rot) * f.d) / 2;
+        items.push({ kind: "panel", room, x: bx + Math.sin(f.rot) * 0.015, y: by + Math.cos(f.rot) * 0.015, w: f.w + 0.3, d: 0.03, rot: f.rot, opts: { h: 2.6, base: 0, fluted: true } });
+        break;
+      }
+      case "sofa": {
+        items.push({ ...base, kind: "sofa", opts: { l: false } });
+        if (f.w > 1.4) items.push({ kind: "rug", room, x: f.x + Math.sin(f.rot) * (f.d / 2 + 0.7), y: f.y + Math.cos(f.rot) * (f.d / 2 + 0.7), w: Math.min(2.4, f.w + 0.3), d: 1.6, rot: f.rot });
+        break;
+      }
+      default:
+        items.push({ ...base, kind: f.kind as Kind });
+    }
+  }
+  return { items, rooms };
+}
+
+export function furnish(scene: HomeScene): Item[] {
+  // Furniture drawn on the plan wins; only rooms with nothing drawn are furnished automatically.
+  const drawn = scene.furniture?.length ? fromPlan(scene) : { items: [], rooms: new Set<string>() };
+  const items: Item[] = [...drawn.items];
   // Rooms with the same name (L-shapes): furnish the biggest part only.
   const biggest = new Map<string, SceneRoom>();
   for (const r of scene.rooms) {
@@ -528,6 +609,7 @@ export function furnish(scene: HomeScene): Item[] {
   }
   const { doors, windows } = axisOpenings(scene);
   for (const room of biggest.values()) {
+    if (drawn.rooms.has(room.name) || room.type === "shaft") continue;
     // Open sides (no wall drawn) get no furniture against them.
     const run = (rect: Rect, _open: Side[], fn: (P: RoomPlanner) => void) => {
       const P = new RoomPlanner(rect, room.name, doors, windows, scene.walls);
@@ -592,9 +674,6 @@ export function furnish(scene: HomeScene): Item[] {
         break;
       case "utility":
         run(r, [], utility);
-        break;
-      case "other":
-        run(r, [], (P) => void P.corner("plant", 0.45));
         break;
       default:
         break;

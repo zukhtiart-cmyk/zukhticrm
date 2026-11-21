@@ -228,14 +228,17 @@ const builders: Record<Item["kind"], (G: THREE.Group, it: Item, M: Mats) => void
     const n = Math.max(1, Math.round(w / 0.6));
     for (let i = 1; i < n; i++) B(G, 0.004, 0.72, 0.004, M.woodDark, -w / 2 + (w / n) * i, 0.12, d / 2);
     B(G, w, 0.04, d + 0.02, M.counter, 0, 0.86, 0.01, 0.005); // top
-    if (opts?.sink) {
-      const sx = -w / 2 + Math.min(0.6, w / 3);
-      B(G, 0.55, 0.012, 0.42, M.chrome, sx, 0.9, 0.02);
+    const clampX = (x: number, half: number) => Math.min(w / 2 - half, Math.max(-w / 2 + half, x));
+    if (opts?.sink || typeof opts?.sinkAt === "number") {
+      const sw = Math.min(0.55, w - 0.06);
+      const sx = typeof opts?.sinkAt === "number" ? clampX(opts.sinkAt, sw / 2) : -w / 2 + Math.min(0.6, w / 3);
+      B(G, sw, 0.012, Math.min(0.42, d - 0.12), M.chrome, sx, 0.9, 0.02);
       C(G, 0.015, 0.015, 0.3, M.chrome, sx, 0.9, -d / 2 + 0.1, 8);
     }
-    if (opts?.hob) {
-      const hx = w / 2 - Math.min(0.6, w / 3);
-      B(G, 0.6, 0.01, 0.5, M.screen, hx, 0.9, 0.02);
+    if (opts?.hob || typeof opts?.hobAt === "number") {
+      const hw = Math.min(0.6, w - 0.06);
+      const hx = typeof opts?.hobAt === "number" ? clampX(opts.hobAt, hw / 2) : w / 2 - Math.min(0.6, w / 3);
+      B(G, hw, 0.01, Math.min(0.5, d - 0.1), M.screen, hx, 0.9, 0.02);
       for (const [a, b] of [
         [-0.15, -0.1],
         [0.15, -0.1],
@@ -243,9 +246,9 @@ const builders: Record<Item["kind"], (G: THREE.Group, it: Item, M: Mats) => void
         [0.15, 0.12],
       ])
         C(G, 0.07, 0.07, 0.004, M.metal, hx + a, 0.91, b);
-      if (opts?.uppers) {
-        B(G, 0.7, 0.35, 0.45, M.metal, hx, 1.62, -d / 2 + 0.25, 0.01); // chimney hood
-        B(G, 0.25, 0.7, 0.25, M.metal, hx, 1.97, -d / 2 + 0.13);
+      if (opts?.uppers || opts?.hood) {
+        B(G, 0.7, 0.35, 0.45, M.metal, hx, 1.62, -d / 2 + 0.25, 0.01).userData.upper = true; // chimney hood
+        B(G, 0.25, 0.7, 0.25, M.metal, hx, 1.97, -d / 2 + 0.13).userData.upper = true;
       }
     }
     if (opts?.uppers) {
@@ -265,6 +268,12 @@ const builders: Record<Item["kind"], (G: THREE.Group, it: Item, M: Mats) => void
       const strip = B(G, w * 0.9, 0.01, 0.02, M.light, 0, 1.54, -d / 2 + 0.3);
       strip.castShadow = false;
     }
+  },
+  bathtub(G, { w, d }, M) {
+    B(G, w, 0.55, d, M.ceramic, 0, 0, 0, 0.06);
+    const inner = B(G, w - 0.14, 0.02, d - 0.14, M.glass, 0, 0.5, 0, 0.04);
+    inner.castShadow = false;
+    C(G, 0.015, 0.015, 0.25, M.chrome, -w / 2 + 0.12, 0.55, -d / 2 + 0.08, 8);
   },
   fridge(G, { w, d }, M) {
     B(G, w, 1.85, d, M.chrome, 0, 0, 0, 0.02);
@@ -364,6 +373,7 @@ const builders: Record<Item["kind"], (G: THREE.Group, it: Item, M: Mats) => void
     const h = Number(opts?.h ?? 1.2),
       base = Number(opts?.base ?? 0);
     const p = B(G, w, h, 0.03, opts?.fluted ? M.fluted : M.accentWall, 0, base, 0);
+    if (base + h > 1.7) p.userData.upper = true;
     p.castShadow = false;
     if (opts?.fluted) {
       // texture scale by width
@@ -418,4 +428,4 @@ export function buildItem(it: Item, M: Mats) {
 }
 
 /** Things you can't walk through in walk-through mode. */
-export const SOLID_KINDS = new Set<Item["kind"]>(["bed", "wardrobe", "dining_set", "sofa", "armchair", "coffee_table", "tv_unit", "sideboard", "counter", "fridge", "vanity", "shower", "lounge_set", "console", "shoe_cabinet", "bookshelf", "puja", "washer", "desk", "dresser", "side_table", "wc"]);
+export const SOLID_KINDS = new Set<Item["kind"]>(["bathtub", "bed", "wardrobe", "dining_set", "sofa", "armchair", "coffee_table", "tv_unit", "sideboard", "counter", "fridge", "vanity", "shower", "lounge_set", "console", "shoe_cabinet", "bookshelf", "puja", "washer", "desk", "dresser", "side_table", "wc"]);
