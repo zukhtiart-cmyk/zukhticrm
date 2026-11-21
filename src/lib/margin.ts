@@ -2,7 +2,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { boqItems, db, orders, projects } from "@/db";
 import { round2 } from "./format";
-import { normaliseSetup, quoteTotals } from "./quote-setup";
+import { normaliseSetup, quoteBase, quoteTotals } from "./quote-setup";
 
 /**
  * Project margin in the project's currency (before tax).
@@ -17,7 +17,8 @@ export async function projectMargin(projectId: string) {
     db.query.projects.findFirst({ where: eq(projects.id, projectId), columns: { quoteSetup: true }, with: { office: { columns: { taxRate: true } } } }),
   ]);
   const sum = items.reduce((a, i) => a + i.qty * i.unitPrice, 0);
-  const sell = project ? quoteTotals(sum, normaliseSetup(project.quoteSetup), project.office.taxRate).subtotal : sum;
+  const setup = project ? normaliseSetup(project.quoteSetup) : null;
+  const sell = project && setup ? quoteTotals(quoteBase(items, setup).base, setup, project.office.taxRate).subtotal : sum;
   const estimated = items.reduce((a, i) => a + i.qty * i.unitCost, 0);
   const poCost = (o: (typeof pos)[number]) => (o.qty ?? 0) * (o.unitCost ?? 0) * (o.fxRate ?? 1);
   let actual = 0;

@@ -2,12 +2,12 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { db, milestones, projects, stages, boqItems } from "@/db";
 import { DEFAULT_MILESTONES, DEFAULT_STAGES } from "./defaults";
 import { round2 } from "./format";
-import { normaliseSetup, quoteTotals } from "./quote-setup";
+import { normaliseSetup, quoteBase, quoteTotals } from "./quote-setup";
 
-/** The contract total: BOQ sum (or the round figure quoted) with GST as the quote setup says. */
-export function contractTotal(items: { qty: number; unitPrice: number }[], quoteSetup: unknown, taxRate: number) {
-  const sum = items.reduce((a, i) => a + i.qty * i.unitPrice, 0);
-  return quoteTotals(sum, normaliseSetup(quoteSetup), taxRate).total;
+/** The contract total: BOQ sum (or the totals written on the quote) with GST as the quote setup says. */
+export function contractTotal(items: { room: string; qty: number; unitPrice: number }[], quoteSetup: unknown, taxRate: number) {
+  const setup = normaliseSetup(quoteSetup);
+  return quoteTotals(quoteBase(items, setup).base, setup, taxRate).total;
 }
 
 type Db = typeof db;

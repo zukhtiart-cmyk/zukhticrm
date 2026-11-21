@@ -16,13 +16,18 @@ export type AppSettings = {
   dailySummary: boolean;
   /** Company default notes printed after a quote's total (material rates, brands, exclusions, packages). */
   quoteNotes: QuoteNotes;
+  /** Letterhead on quotes and PDFs. Logo is a PNG saved with saveFile. */
+  company: CompanyProfile;
 };
+
+export type CompanyProfile = { name: string; tagline: string; logoUrl: string | null; website: string; email: string };
 
 const DEFAULTS: AppSettings = {
   whatsappMode: "approve",
   weeklySummary: true,
   dailySummary: true,
   quoteNotes: DEFAULT_NOTES,
+  company: { name: "Zukhti Home", tagline: "Turnkey interiors", logoUrl: null, website: "zukhti.com", email: "hello@zukhti.com" },
   // Starting values only — check and update them on the Rates page.
   fxRates: { asOf: "not set", perINR: { INR: 1, AED: 23, CNY: 12, USD: 85, EUR: 92 } },
 };

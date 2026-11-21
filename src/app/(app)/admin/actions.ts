@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db, offices, roleEnum, users } from "@/db";
 import { requireUser } from "@/lib/auth";
+import { getSettings, setSetting } from "@/lib/settings";
+import { saveFile } from "@/lib/storage";
 
 const userSchema = z.object({
   name: z.string().trim().min(1),
@@ -71,6 +73,14 @@ export async function updateOffice(form: FormData) {
       currency: String(form.get("currency")).toUpperCase(),
       taxLabel: String(form.get("taxLabel")),
       taxRate: Number.isFinite(taxRate) ? taxRate : 0,
+      ...(form.has("address")
+        ? {
+            address: String(form.get("address") ?? "").trim().slice(0, 300) || null,
+            phone: String(form.get("phone") ?? "").trim().slice(0, 60) || null,
+            email: String(form.get("email") ?? "").trim().slice(0, 120) || null,
+            taxId: String(form.get("taxId") ?? "").trim().slice(0, 40) || null,
+          }
+        : {}),
     })
     .where(eq(offices.id, id));
   revalidatePath("/admin");
@@ -87,5 +97,27 @@ export async function setUserPhone(form: FormData) {
     .update(users)
     .set({ phone: phone || null })
     .where(eq(users.id, id));
+  revalidatePath("/admin");
+}
+
+/** Company letterhead: name, tagline, website, email and logo (PNG, converted in the browser). */
+export async function saveCompany(form: FormData) {
+  await requireUser("admin");
+  const { company } = await getSettings();
+  const t = (k: string, max = 120) => String(form.get(k) ?? "").trim().slice(0, max);
+  let logoUrl = company.logoUrl;
+  const logo = form.get("logo");
+  if (logo instanceof File && logo.size > 0) {
+    if (!/^image\/(png|jpeg)$/.test(logo.type) || logo.size > 4 * 1024 * 1024) throw new Error("Logo must be a PNG or JPG under 4 MB.");
+    logoUrl = await saveFile(logo, "brand");
+  }
+  if (form.get("removeLogo") === "1") logoUrl = null;
+  await setSetting("company", {
+    name: t("name") || "Zukhti Home",
+    tagline: t("tagline"),
+    website: t("website"),
+    email: t("email"),
+    logoUrl,
+  });
   revalidatePath("/admin");
 }

@@ -51,6 +51,12 @@ export const offices = pgTable("offices", {
   currency: text("currency").notNull().default("INR"),
   taxLabel: text("tax_label").notNull().default("GST"),
   taxRate: numeric("tax_rate", { precision: 5, scale: 2, mode: "number" }).notNull().default(18),
+  /** Printed on quotes and invoices. */
+  address: text("address"),
+  phone: text("phone"),
+  email: text("email"),
+  /** GSTIN / TRN. */
+  taxId: text("tax_id"),
   createdAt: created(),
 });
 
@@ -229,12 +235,14 @@ export const boqItems = pgTable("boq_items", {
   title: text("title"),
   /** Size shown after the description, e.g. 7' x 9'. */
   size: text("size"),
+  /** Show this item's amount on the quote even when the quote shows one total (e.g. the sofa). */
+  showPrice: boolean("show_price").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: created(),
 });
 
-export type QuoteLine = { room: string; description: string; unit: string; qty: number; unitPrice: number; amount: number; title?: string | null; size?: string | null };
-export type QuoteMeta = { title?: string; roomSizes?: Record<string, string>; notes?: Record<string, unknown>; taxMode?: string; sum?: number; amount?: number };
+export type QuoteLine = { room: string; description: string; unit: string; qty: number; unitPrice: number; amount: number; title?: string | null; size?: string | null; showPrice?: boolean };
+export type QuoteMeta = { title?: string; roomSizes?: Record<string, string>; roomTotals?: Record<string, number>; notes?: Record<string, unknown>; taxMode?: string; sum?: number; amount?: number };
 
 export const quotes = pgTable(
   "quotes",

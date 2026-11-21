@@ -89,6 +89,7 @@ export function QuoteDocument({
   const words = (n: number) => (cur === "INR" ? `Rs. ${amountInWords(n, cur)} only/-` : `${cur} ${amountInWords(n, cur)} only`);
   const lettersText = letters.length > 3 ? `${letters.slice(0, 3).join("+")}+Etc` : letters.join("+");
   const priced = mode === "itemised";
+  const anyShown = !priced && quote.lines.some((l) => l.showPrice);
 
   return (
     <article className="card mx-auto max-w-3xl p-6 sm:p-10 print:border-0 print:p-0">
@@ -98,7 +99,7 @@ export function QuoteDocument({
       {rooms.map((room, ri) => {
         const lines = quote.lines.filter((l) => l.room === room);
         const size = meta?.roomSizes?.[room];
-        const roomSum = lines.reduce((a, l) => a + l.amount, 0);
+        const roomSum = meta?.roomTotals?.[room] ?? lines.reduce((a, l) => a + l.amount, 0);
         return (
           <section key={room} className="mb-5 break-inside-avoid-page">
             <h2 className="mb-1 flex items-baseline gap-2 border-b-2 border-ink pb-1 text-sm font-bold uppercase tracking-wide">
@@ -121,6 +122,7 @@ export function QuoteDocument({
                         <th className="text-right">Amount</th>
                       </>
                     )}
+                    {anyShown && <th className="text-right">Price</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -142,12 +144,13 @@ export function QuoteDocument({
                           <td className="whitespace-nowrap text-right align-top font-semibold">{money(l.amount, cur)}</td>
                         </>
                       )}
+                      {anyShown && <td className="whitespace-nowrap text-right align-top font-semibold">{l.showPrice ? money(l.amount, cur) : ""}</td>}
                     </tr>
                   ))}
                   {mode === "rooms" && (
                     <tr>
                       <td />
-                      <td className="text-right font-semibold">
+                      <td colSpan={anyShown ? 2 : 1} className="text-right font-semibold">
                         Total ({letters[ri]}): {money(roomSum, cur)}
                       </td>
                     </tr>

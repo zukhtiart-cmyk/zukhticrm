@@ -7,7 +7,7 @@ import { loadProject } from "../../data";
 import { projectMargin } from "@/lib/margin";
 import { can } from "@/lib/permissions";
 import { getSettings } from "@/lib/settings";
-import { normaliseSetup, PRICE_MODE_LABELS, PRICE_MODES, quoteTotals, sectionLetter, TAX_MODE_LABELS, TAX_MODES } from "@/lib/quote-setup";
+import { normaliseSetup, PRICE_MODE_HINTS, PRICE_MODE_LABELS, PRICE_MODES, quoteBase, quoteTotals, sectionLetter, TAX_MODE_LABELS, TAX_MODES } from "@/lib/quote-setup";
 import { orderedRooms, sortItems } from "@/lib/boq-order";
 import { AiBoqDraft } from "./ai-draft";
 import { PlanBuilder } from "./plan-builder";
@@ -23,9 +23,11 @@ export default async function BoqPage({ params, searchParams }: { params: Promis
   const cur = project.office.currency;
   const items = project.boqItems;
   const rooms = orderedRooms(items, setup.roomOrder);
-  const sum = round2(items.reduce((a, i) => a + i.qty * i.unitPrice, 0));
+  const b = quoteBase(items, setup);
+  const sum = b.sum;
   const cost = round2(items.reduce((a, i) => a + i.qty * i.unitCost, 0));
-  const t = quoteTotals(sum, setup, project.office.taxRate);
+  const t = quoteTotals(b.base, setup, project.office.taxRate);
+  const writeTotal = setup.mode === "combined";
   const margin = t.subtotal ? Math.round(((t.subtotal - cost) / t.subtotal) * 100) : 0;
   const trueMargin = await projectMargin(project.id);
   const orderedIds = new Set(project.orders.map((o) => o.boqItemId).filter(Boolean));
@@ -42,16 +44,16 @@ export default async function BoqPage({ params, searchParams }: { params: Promis
         ))}
     </optgroup>
   ));
-  const roomTotal = (room: string) => items.filter((i) => i.room === room).reduce((a, i) => a + i.qty * i.unitPrice, 0);
+  const roomTotal = (room: string) => b.rooms[room]?.sum ?? 0;
   const editDefault = can(user.role, "rates");
 
   return (
     <div className="grid gap-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="card p-4">
-          <p className="label">{setup.totalOverride ? "Quoted amount" : "Items total"}</p>
+          <p className="label">{setup.totalOverride ? "Total you wrote" : setup.mode === "rooms" && Object.keys(setup.roomTotals).length ? "Room totals" : "Items total"}</p>
           <p className="h-display text-2xl">{money(t.amount, cur)}</p>
-          {setup.totalOverride ? <p className="text-xs text-muted">Items add up to {money(sum, cur)}</p> : null}
+          {t.amount !== sum ? <p className="text-xs text-muted">Item prices add up to {money(sum, cur)}</p> : null}
         </div>
         <div className="card p-4">
           <p className="label">
@@ -90,6 +92,21 @@ export default async function BoqPage({ params, searchParams }: { params: Promis
         }
       >
         {!items.length && <Empty>No items yet. Build from the floor plan above, or add items below.</Empty>}
+        {items.length > 0 && (
+          <form action={saveQuoteSetup} className="mb-5 grid gap-3 rounded-2xl border border-brass/40 bg-brass-soft/40 p-4 sm:grid-cols-[1fr_auto] sm:items-end">
+            <input type="hidden" name="projectId" value={project.id} />
+            <div>
+              <label className="label">{writeTotal ? "Total amount to quote" : "Round-figure total (optional)"}</label>
+              <input name="totalOverride" type="number" step="1" min="0" defaultValue={setup.totalOverride ?? ""} placeholder={sum ? String(Math.round(b.base)) : "e.g. 1359000"} className="input text-lg font-semibold" />
+              <p className="mt-1 text-xs text-muted">
+                {PRICE_MODE_LABELS[setup.mode]} · {writeTotal ? "item prices are not printed, except items with “show price” ticked. " : ""}
+                {sum ? `Item prices add up to ${money(sum, cur)}. ` : "Item prices are optional — they are only used for your margin. "}
+                {setup.taxMode === "add" ? `${project.office.taxLabel} ${project.office.taxRate}% is added on top.` : setup.taxMode === "included" ? `Includes ${project.office.taxLabel}.` : ""}
+              </p>
+            </div>
+            <button className="btn-primary">Save total</button>
+          </form>
+        )}
         {rooms.map((room, ri) => (
           <div key={room} className="mb-6">
             <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl bg-paper p-2">
@@ -99,9 +116,14 @@ export default async function BoqPage({ params, searchParams }: { params: Promis
                 <input type="hidden" name="room" value={room} />
                 <input name="name" defaultValue={room} className="input w-52 py-1.5 font-semibold" aria-label="Room name" />
                 <input name="size" defaultValue={setup.roomSizes[room] ?? ""} placeholder={`Size, e.g. 12'2" x 10'`} className="input w-36 py-1.5" aria-label="Room size" />
+                {setup.mode === "rooms" && (
+                  <input name="total" type="number" step="1" min="0" defaultValue={setup.roomTotals[room] ?? ""} placeholder={`Room total ${Math.round(roomTotal(room))}`} className="input w-40 py-1.5" aria-label="Room total" />
+                )}
                 <button className="btn-ghost px-2 py-1 text-xs">Save</button>
               </form>
-              <span className="text-sm font-semibold">{money(roomTotal(room), cur)}</span>
+              <span className="text-sm font-semibold" title="Item prices in this room">
+                {money(b.rooms[room]?.total ?? roomTotal(room), cur)}
+              </span>
               <form action={moveRoom} className="flex gap-1">
                 <input type="hidden" name="projectId" value={project.id} />
                 <input type="hidden" name="room" value={room} />
@@ -128,7 +150,8 @@ export default async function BoqPage({ params, searchParams }: { params: Promis
                   <input type="hidden" name="projectId" value={project.id} />
                   <input type="hidden" name="id" value={i.id} />
                   <input type="hidden" name="room" value={i.room} />
-                  <div className="grid grid-cols-2 items-center gap-2 md:grid-cols-[auto_2.4fr_0.9fr_0.6fr_0.5fr_0.8fr_0.8fr_0.9fr_auto]">
+                  <input type="hidden" name="priceSent" value="1" />
+                  <div className="grid grid-cols-2 items-center gap-2 md:grid-cols-[auto_2fr_0.9fr_0.6fr_0.7fr_0.9fr_0.9fr_0.9fr_auto]">
                     <span className="hidden w-6 text-center text-xs text-muted md:block">{ii + 1}</span>
                     <input name="title" defaultValue={i.title ?? ""} placeholder="TITLE" className="input py-1.5 font-semibold uppercase" aria-label="Title" />
                     <input name="size" defaultValue={i.size ?? ""} placeholder="Size" className="input py-1.5" aria-label="Size" />
@@ -153,7 +176,15 @@ export default async function BoqPage({ params, searchParams }: { params: Promis
                       </button>
                     </div>
                   </div>
-                  <textarea name="description" defaultValue={i.description} rows={2} className="input py-1.5 text-xs md:ml-8" aria-label="Description of work" />
+                  <div className="flex flex-col gap-2 md:ml-8 md:flex-row md:items-start">
+                    <textarea name="description" defaultValue={i.description} rows={2} className="input flex-1 py-1.5 text-xs" aria-label="Description of work" />
+                    {setup.mode !== "itemised" && (
+                      <label className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs ${i.showPrice ? "border-brass bg-brass-soft font-semibold" : "border-line text-muted"}`} title="Print this item's price on the quote">
+                        <input type="checkbox" name="showPrice" value="1" defaultChecked={i.showPrice} />
+                        Show price on quote
+                      </label>
+                    )}
+                  </div>
                 </form>
               ))}
               <form action={addBoqItem} className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-line p-2 text-sm">
@@ -187,9 +218,12 @@ export default async function BoqPage({ params, searchParams }: { params: Promis
               <legend className="label">Prices on the quote</legend>
               <div className="grid gap-1.5">
                 {PRICE_MODES.map((m) => (
-                  <label key={m} className="flex items-center gap-2 text-sm">
-                    <input type="radio" name="mode" value={m} defaultChecked={setup.mode === m} />
-                    {PRICE_MODE_LABELS[m]}
+                  <label key={m} className="flex items-start gap-2 text-sm">
+                    <input type="radio" className="mt-1" name="mode" value={m} defaultChecked={setup.mode === m} />
+                    <span>
+                      {PRICE_MODE_LABELS[m]}
+                      <span className="block text-xs text-muted">{PRICE_MODE_HINTS[m]}</span>
+                    </span>
                   </label>
                 ))}
               </div>
@@ -205,12 +239,10 @@ export default async function BoqPage({ params, searchParams }: { params: Promis
                 ))}
               </div>
             </fieldset>
-            <div>
-              <label className="label">Round-figure total (optional)</label>
-              <input name="totalOverride" type="number" step="1" min="0" defaultValue={setup.totalOverride ?? ""} placeholder={String(Math.round(sum))} className="input" />
-              <p className="mt-1 text-xs text-muted">
-                Items add up to {money(sum, cur)}. Leave empty to quote that.{setup.taxMode === "add" ? ` ${project.office.taxLabel} is added on top.` : ""}
-              </p>
+            <div className="rounded-xl bg-paper p-3 text-xs text-muted">
+              <p className="mb-1 font-semibold text-ink">{PRICE_MODE_LABELS[setup.mode]}</p>
+              {PRICE_MODE_HINTS[setup.mode]}
+              <p className="mt-2">The total to quote is set at the top of the bill of quantities.</p>
             </div>
           </div>
           <div>

@@ -17,6 +17,7 @@ import {
   toggleUserActive,
   updateOffice,
 } from "./actions";
+import { CompanyForm } from "./company-form";
 import { saveWhatsappSettings } from "../inbox/actions";
 import { getSettings } from "@/lib/settings";
 import { appBaseUrl } from "@/lib/portal";
@@ -369,46 +370,53 @@ export default async function AdminPage() {
           </div>
         </Section>
 
+        <Section title="Company letterhead">
+          <CompanyForm company={wa.company} />
+        </Section>
+
         <Section title="Offices">
+          <p className="mb-3 text-xs text-muted">Address, phone, email and GSTIN / TRN print on quotes and invoices from that office.</p>
           <div className="grid gap-3">
             {allOffices.map((o) => (
-              <form
-                key={o.id}
-                action={updateOffice}
-                className="grid items-end gap-2 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]"
-              >
+              <form key={o.id} action={updateOffice} className="grid items-end gap-2 rounded-xl border border-line p-3 sm:grid-cols-4">
                 <input type="hidden" name="id" value={o.id} />
-                <div>
+                <div className="sm:col-span-2">
                   <label className="label">Office</label>
                   <input name="name" defaultValue={o.name} className="input" />
                 </div>
                 <div>
                   <label className="label">Currency</label>
-                  <input
-                    name="currency"
-                    defaultValue={o.currency}
-                    className="input"
-                  />
+                  <input name="currency" defaultValue={o.currency} className="input" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="label">Tax</label>
+                    <input name="taxLabel" defaultValue={o.taxLabel} className="input" />
+                  </div>
+                  <div>
+                    <label className="label">Tax %</label>
+                    <input name="taxRate" type="number" step="0.01" defaultValue={o.taxRate} className="input" />
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="label">Address</label>
+                  <input name="address" defaultValue={o.address ?? ""} placeholder="Office address" className="input" />
                 </div>
                 <div>
-                  <label className="label">Tax</label>
-                  <input
-                    name="taxLabel"
-                    defaultValue={o.taxLabel}
-                    className="input"
-                  />
+                  <label className="label">Phone</label>
+                  <input name="phone" defaultValue={o.phone ?? ""} placeholder="+91 …" className="input" />
                 </div>
                 <div>
-                  <label className="label">Tax %</label>
-                  <input
-                    name="taxRate"
-                    type="number"
-                    step="0.01"
-                    defaultValue={o.taxRate}
-                    className="input"
-                  />
+                  <label className="label">Email</label>
+                  <input name="email" defaultValue={o.email ?? ""} placeholder="mumbai@zukhti.com" className="input" />
                 </div>
-                <button className="btn-ghost">Save</button>
+                <div>
+                  <label className="label">{o.taxLabel === "GST" ? "GSTIN" : "Tax number"}</label>
+                  <input name="taxId" defaultValue={o.taxId ?? ""} className="input" />
+                </div>
+                <div className="sm:col-span-3 sm:text-right">
+                  <button className="btn-ghost">Save</button>
+                </div>
               </form>
             ))}
           </div>

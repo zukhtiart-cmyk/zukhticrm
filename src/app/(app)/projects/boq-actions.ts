@@ -80,8 +80,13 @@ export async function saveRoomSection(form: FormData) {
   const roomSizes = { ...cur.roomSizes };
   delete roomSizes[from];
   if (size) roomSizes[to] = size;
+  const roomTotals = { ...cur.roomTotals };
+  const typed = form.has("total") ? String(form.get("total") ?? "").replace(/[,\s]/g, "") : roomTotals[from];
+  delete roomTotals[from];
+  if (typed !== undefined && typed !== "") roomTotals[to] = Number(typed);
   const roomOrder = cur.roomOrder.map((r) => (r === from ? to : r));
-  await saveSetup(project.id, normaliseSetup({ ...cur, roomSizes, roomOrder }));
+  await saveSetup(project.id, normaliseSetup({ ...cur, roomSizes, roomTotals, roomOrder }));
+  await syncMilestoneAmounts(db, project.id, project.office.taxRate);
   done(project.id);
 }
 

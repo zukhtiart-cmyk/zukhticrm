@@ -7,9 +7,14 @@
 export const PRICE_MODES = ["combined", "rooms", "itemised"] as const;
 export type PriceMode = (typeof PRICE_MODES)[number];
 export const PRICE_MODE_LABELS: Record<PriceMode, string> = {
-  combined: "One combined total",
+  combined: "One total only",
   rooms: "Total per room",
   itemised: "Price for every item",
+};
+export const PRICE_MODE_HINTS: Record<PriceMode, string> = {
+  combined: "No prices next to items — you write the total. Tick “show price” on any item (e.g. the sofa) to print its price.",
+  rooms: "A total under each room — type it, or let the items add up.",
+  itemised: "Qty, rate and amount for every item.",
 };
 export const TAX_MODES = ["add", "included", "none"] as const;
 export type TaxMode = (typeof TAX_MODES)[number];
@@ -42,6 +47,8 @@ export type QuoteSetup = {
   totalOverride: number | null;
   /** Room → size shown in its heading, e.g. 17'2" x 27'4". */
   roomSizes: Record<string, string>;
+  /** Room totals typed by hand (Total per room); rooms without one add up their items. */
+  roomTotals: Record<string, number>;
   roomOrder: string[];
   notes: QuoteNotes;
 };
@@ -75,7 +82,7 @@ export const DEFAULT_NOTES: QuoteNotes = {
 };
 
 export function defaultSetup(notes: QuoteNotes = DEFAULT_NOTES): QuoteSetup {
-  return { title: "", mode: "combined", taxMode: "add", totalOverride: null, roomSizes: {}, roomOrder: [], notes };
+  return { title: "", mode: "combined", taxMode: "add", totalOverride: null, roomSizes: {}, roomTotals: {}, roomOrder: [], notes };
 }
 
 const str = (v: unknown, max = 400) => (typeof v === "string" ? v.slice(0, max) : "");
@@ -99,6 +106,12 @@ export function normaliseSetup(raw: unknown, defaults: QuoteNotes = DEFAULT_NOTE
   const base = defaultSetup(defaults);
   const sizes: Record<string, string> = {};
   if (o.roomSizes && typeof o.roomSizes === "object") for (const [k, v] of Object.entries(o.roomSizes as Record<string, unknown>).slice(0, 80)) if (typeof v === "string" && v.trim()) sizes[k.slice(0, 60)] = v.trim().slice(0, 40);
+  const roomTotals: Record<string, number> = {};
+  if (o.roomTotals && typeof o.roomTotals === "object")
+    for (const [k, v] of Object.entries(o.roomTotals as Record<string, unknown>).slice(0, 80)) {
+      const n = Number(v);
+      if (v !== null && v !== "" && Number.isFinite(n) && n > 0) roomTotals[k.slice(0, 60)] = Math.round(n * 100) / 100;
+    }
   const ov = Number(o.totalOverride);
   return {
     title: str(o.title, 200),
@@ -106,12 +119,34 @@ export function normaliseSetup(raw: unknown, defaults: QuoteNotes = DEFAULT_NOTE
     taxMode: (TAX_MODES as readonly string[]).includes(String(o.taxMode)) ? (o.taxMode as TaxMode) : base.taxMode,
     totalOverride: o.totalOverride !== null && o.totalOverride !== "" && Number.isFinite(ov) && ov > 0 ? Math.round(ov * 100) / 100 : null,
     roomSizes: sizes,
+    roomTotals,
     roomOrder: Array.isArray(o.roomOrder) ? o.roomOrder.map((x) => str(x, 60)).filter(Boolean).slice(0, 80) : [],
     notes: normaliseNotes(o.notes, defaults),
   };
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * What the items come to: the plain sum, each room's total (typed or added up), and the base the quote
+ * starts from (room totals in "Total per room", otherwise the sum).
+ */
+export function quoteBase(items: { room: string; qty: number; unitPrice: number }[], setup: Pick<QuoteSetup, "mode" | "roomTotals">) {
+  const rooms: Record<string, { sum: number; total: number; typed: boolean }> = {};
+  for (const i of items) {
+    const r = (rooms[i.room] ??= { sum: 0, total: 0, typed: false });
+    r.sum += i.qty * i.unitPrice;
+  }
+  for (const [name, r] of Object.entries(rooms)) {
+    const typed = setup.mode === "rooms" ? setup.roomTotals[name] : undefined;
+    r.sum = r2(r.sum);
+    r.total = typed ?? r.sum;
+    r.typed = typed !== undefined;
+  }
+  const sum = r2(Object.values(rooms).reduce((a, r) => a + r.sum, 0));
+  const base = r2(Object.values(rooms).reduce((a, r) => a + r.total, 0));
+  return { sum, rooms, base };
+}
 
 /**
  * The quote's money: the calculated sum, the amount quoted (a round-figure override if set), GST and the total.

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { QuoteDocument } from "@/components/documents";
-import { PrintButton } from "@/components/print-button";
+import { QuoteActions } from "@/components/quote-actions";
 import { loadPortalClient, loadPortalProject } from "@/lib/portal-data";
 
 export default async function PortalQuote({
@@ -24,7 +24,7 @@ export default async function PortalQuote({
             >
               ← Back
             </Link>
-            <PrintButton />
+            <QuoteActions pdfHref={`/portal/${token}/quote/${quoteId}/pdf`} />
           </div>
           <QuoteDocument
             project={project}

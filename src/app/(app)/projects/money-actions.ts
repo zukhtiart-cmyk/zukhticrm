@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { boqItems, db, milestones, quotes, quoteStatusEnum, rateItems, type QuoteLine } from "@/db";
 import { round2 } from "@/lib/format";
 import { syncMilestoneAmounts } from "@/lib/projects";
-import { normaliseSetup, quoteTotals } from "@/lib/quote-setup";
+import { normaliseSetup, quoteBase, quoteTotals } from "@/lib/quote-setup";
 import { orderedRooms, sortItems } from "@/lib/boq-order";
 import { getSettings } from "@/lib/settings";
 import { z } from "zod";
@@ -54,6 +54,7 @@ export async function updateBoqItem(form: FormData) {
       room: String(form.get("room") ?? "").trim() || "General",
       ...(form.has("title") ? { title: String(form.get("title") ?? "").trim() || null } : {}),
       ...(form.has("size") ? { size: String(form.get("size") ?? "").trim() || null } : {}),
+      ...(form.has("priceSent") ? { showPrice: form.get("showPrice") === "1" } : {}),
       description: String(form.get("description") ?? "").trim(),
       unit: String(form.get("unit") ?? "").trim(),
       qty: num(form.get("qty")),
@@ -87,6 +88,7 @@ export async function createQuote(form: FormData) {
       room: i.room,
       title: i.title,
       size: i.size,
+      showPrice: i.showPrice,
       description: i.description,
       unit: i.unit,
       qty: i.qty,
@@ -94,8 +96,9 @@ export async function createQuote(form: FormData) {
       amount: round2(i.qty * i.unitPrice),
     })),
   );
-  const sum = round2(lines.reduce((a, l) => a + l.amount, 0));
-  const t = quoteTotals(sum, setup, project.office.taxRate);
+  const b = quoteBase(items, setup);
+  const t = quoteTotals(b.base, setup, project.office.taxRate);
+  const roomTotals = Object.fromEntries(Object.entries(b.rooms).map(([k, r]) => [k, r.total]));
   const last = await db.query.quotes.findFirst({ where: eq(quotes.projectId, project.id), orderBy: desc(quotes.version) });
   const [quote] = await db
     .insert(quotes)
@@ -110,7 +113,7 @@ export async function createQuote(form: FormData) {
       total: t.total,
       lines,
       mode: setup.mode,
-      meta: { title: setup.title, roomSizes: setup.roomSizes, notes: setup.notes, taxMode: setup.taxMode, sum: t.sum, amount: t.amount },
+      meta: { title: setup.title, roomSizes: setup.roomSizes, roomTotals, notes: setup.notes, taxMode: setup.taxMode, sum: b.sum, amount: t.amount },
     })
     .returning();
   redirect(`/projects/${project.id}/quote/${quote.id}`);
