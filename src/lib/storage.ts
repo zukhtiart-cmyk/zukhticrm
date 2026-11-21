@@ -36,7 +36,7 @@ export async function saveFile(file: File, folder: string) {
   const dest = path.join(process.cwd(), "public", "uploads", key);
   await mkdir(path.dirname(dest), { recursive: true });
   await writeFile(dest, Buffer.from(await file.arrayBuffer()));
-  return `/uploads/${key}`;
+  return `/files/${key}`; // served (with access checks) by app/files
 }
 
 /** Adds the portal token to private file links so clients can open them from the portal. */

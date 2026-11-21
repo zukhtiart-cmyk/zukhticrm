@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { and, eq, ne } from "drizzle-orm";
 import { db, designs, projects } from "@/db";
 import { loadPortalClient } from "@/lib/portal-data";
-import { INTERIOR_STYLES, type InteriorStyle } from "@/lib/home-scene";
+import { INTERIOR_STYLES, normaliseScene, type InteriorStyle } from "@/lib/home-scene";
 import { Home3D } from "@/components/home3d/home-3d";
 
 export default async function PortalHome3D({ params }: { params: Promise<{ token: string; designId: string }> }) {
@@ -25,7 +25,7 @@ export default async function PortalHome3D({ params }: { params: Promise<{ token
       <h1 className="text-xl font-bold">
         {d.title} <span className="text-sm font-normal text-muted">· {project.name}</span>
       </h1>
-      <Home3D scene={d.scene} style={style} canChangeStyle />
+      <Home3D scene={normaliseScene(d.scene)} style={style} canChangeStyle />
       <p className="text-xs text-muted">Spin around the dollhouse, or choose Walk through and tap a room. You can try other styles here — your designer&apos;s choice is the one shown first.</p>
     </div>
   );

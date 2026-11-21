@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { INTERIOR_STYLES, type HomeScene, type InteriorStyle } from "@/lib/home-scene";
+import { INTERIOR_STYLES, axisOpenings, type HomeScene, type InteriorStyle } from "@/lib/home-scene";
 import { makeMaterials, PALETTES } from "./materials";
 import { buildHouse, type Blocker, type Built } from "./build";
 import { clearGeoCache } from "./models";
@@ -84,10 +84,12 @@ export default function HomeViewer({
     three.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     three.environmentIntensity = 0.55;
 
-    const W = scene.width,
-      D = scene.depth,
+    const { x0: BX0, y0: BY0, x1: BX1, y1: BY1 } = scene.box;
+    const W = BX1 - BX0,
+      D = BY1 - BY0,
       S = Math.max(W, D);
-    const centre = new THREE.Vector3(W / 2, 0, D / 2);
+    const centre = new THREE.Vector3((BX0 + BX1) / 2, 0, (BY0 + BY1) / 2);
+    const sceneDoors = axisOpenings(scene).doors;
 
     const hemi = new THREE.HemisphereLight("#fffaf2", "#b9a88f", 0.9);
     three.add(hemi);
@@ -188,8 +190,18 @@ export default function HomeViewer({
     const keys = new Set<string>();
     const stick = { x: 0, y: 0 };
     const blocked = (x: number, y: number) => {
-      if (x < -0.5 || y < -0.5 || x > W + 0.5 || y > D + 0.5) return true;
-      for (const b of blockers) if (x > b.x1 - RADIUS && x < b.x2 + RADIUS && y > b.y1 - RADIUS && y < b.y2 + RADIUS) return true;
+      if (x < BX0 - 0.5 || y < BY0 - 0.5 || x > BX1 + 0.5 || y > BY1 + 0.5) return true;
+      for (const b of blockers) {
+        if (b.kind === "box") {
+          if (x > b.x1 - RADIUS && x < b.x2 + RADIUS && y > b.y1 - RADIUS && y < b.y2 + RADIUS) return true;
+        } else {
+          const dx = b.bx - b.ax,
+            dy = b.by - b.ay;
+          const L2 = dx * dx + dy * dy || 1;
+          const k = Math.max(0, Math.min(1, ((x - b.ax) * dx + (y - b.ay) * dy) / L2));
+          if (Math.hypot(x - (b.ax + dx * k), y - (b.ay + dy * k)) < RADIUS + b.r) return true;
+        }
+      }
       return false;
     };
     const roomAt = (x: number, y: number) => scene.rooms.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.d)?.name ?? "";
@@ -219,12 +231,12 @@ export default function HomeViewer({
         return;
       }
       // Stand near a door looking in.
-      const door = scene.doors.find((o) => (o.dir === "h" ? Math.abs(o.y - r.y) < 0.05 || Math.abs(o.y - (r.y + r.d)) < 0.05 : Math.abs(o.x - r.x) < 0.05 || Math.abs(o.x - (r.x + r.w)) < 0.05) && o.x >= r.x - 0.05 && o.x <= r.x + r.w + 0.05 && o.y >= r.y - 0.05 && o.y <= r.y + r.d + 0.05);
+      const door = sceneDoors.find((o) => (o.dir === "h" ? Math.abs(o.y - r.y) < 0.35 || Math.abs(o.y - (r.y + r.d)) < 0.35 : Math.abs(o.x - r.x) < 0.35 || Math.abs(o.x - (r.x + r.w)) < 0.35) && o.x >= r.x - 0.35 && o.x <= r.x + r.w + 0.35 && o.y >= r.y - 0.35 && o.y <= r.y + r.d + 0.35);
       let px = r.x + r.w / 2,
         py = r.y + r.d / 2;
       if (door) {
-        const inX = door.dir === "v" ? (Math.abs(door.x - r.x) < 0.05 ? 0.5 : -0.5) : 0;
-        const inY = door.dir === "h" ? (Math.abs(door.y - r.y) < 0.05 ? 0.5 : -0.5) : 0;
+        const inX = door.dir === "v" ? (Math.abs(door.x - r.x) < Math.abs(door.x - (r.x + r.w)) ? 0.5 : -0.5) : 0;
+        const inY = door.dir === "h" ? (Math.abs(door.y - r.y) < Math.abs(door.y - (r.y + r.d)) ? 0.5 : -0.5) : 0;
         px = door.x + inX;
         py = door.y + inY;
       }
@@ -235,7 +247,7 @@ export default function HomeViewer({
       setHere(roomAt(p.x, p.y));
     };
     const startWalk = () => {
-      const main = scene.doors.find((d) => d.main);
+      const main = sceneDoors.find((d) => d.main);
       const living = scene.rooms.find((r) => r.type === "living" || r.type === "living_dining") ?? scene.rooms[0];
       if (main) {
         // step inside the home from the main door

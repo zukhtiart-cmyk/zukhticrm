@@ -32,6 +32,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
   }
   if (!allowed) return new Response("Not found", { status: 404 });
 
+  // Local development without Blob: files saved to public/uploads.
+  if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.BLOB_STORE_ID && !process.env.VERCEL) {
+    const { readFile } = await import("node:fs/promises");
+    const nodePath = await import("node:path");
+    try {
+      const buf = await readFile(nodePath.join(process.cwd(), "public", "uploads", pathname));
+      const ext = pathname.split(".").pop()?.toLowerCase() ?? "";
+      const type = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", pdf: "application/pdf", webm: "audio/webm" }[ext] ?? "application/octet-stream";
+      return new Response(new Uint8Array(buf), { headers: { "Content-Type": type, "Cache-Control": "private, max-age=3600" } });
+    } catch {
+      return new Response("Not found", { status: 404 });
+    }
+  }
+
   let result: Awaited<ReturnType<typeof get>>;
   try {
     result = await get(pathname, { access: "private" });

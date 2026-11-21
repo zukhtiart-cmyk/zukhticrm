@@ -15,25 +15,45 @@ const STYLES = [
   ["coastal", "Coastal", "#e6dccb", "#4f86a6"],
 ] as const;
 
-const STEPS = ["Reading the plan…", "Measuring rooms…", "Finding doors and windows…", "Placing furniture…", "Building your home in 3D…"];
+const STEPS = ["Reading the plan…", "Tracing walls…", "Finding doors and windows…", "Measuring rooms…", "Almost there…"];
 
-/** Shrinks big photos/scans so they upload fast and stay under the reader's size limit. */
-async function prepare(file: File): Promise<File> {
-  if (file.type === "application/pdf") return file;
-  const bmp = await createImageBitmap(file).catch(() => null);
-  if (!bmp) return file;
-  const max = 2000;
-  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
-  if (k === 1 && file.size < 3.5 * 1024 * 1024) return file;
+/** Turns the plan into a clean image (PDF → first page) no bigger than 2400 px, and reports its size. */
+async function prepare(file: File): Promise<{ file: File; width: number; height: number }> {
+  let source: CanvasImageSource & { width: number; height: number };
+  if (file.type === "application/pdf") {
+    const pdfjs = await import("pdfjs-dist");
+    pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const page = await doc.getPage(1);
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: Math.min(4, 2400 / Math.max(base.width, base.height)) });
+    const c = document.createElement("canvas");
+    c.width = Math.round(viewport.width);
+    c.height = Math.round(viewport.height);
+    const g = c.getContext("2d")!;
+    g.fillStyle = "#fff";
+    g.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: g, viewport }).promise;
+    source = c;
+  } else {
+    const bmp = await createImageBitmap(file).catch(() => null);
+    if (!bmp) throw new Error("Couldn't open that image — try a JPG or PNG.");
+    source = bmp;
+  }
+  const max = 2400;
+  const k = Math.min(1, max / Math.max(source.width, source.height));
   const c = document.createElement("canvas");
-  c.width = Math.round(bmp.width * k);
-  c.height = Math.round(bmp.height * k);
+  c.width = Math.round(source.width * k);
+  c.height = Math.round(source.height * k);
   const g = c.getContext("2d")!;
   g.fillStyle = "#fff";
   g.fillRect(0, 0, c.width, c.height);
-  g.drawImage(bmp, 0, 0, c.width, c.height);
-  const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.92));
-  return blob ? new File([blob], "plan.jpg", { type: "image/jpeg" }) : file;
+  g.drawImage(source, 0, 0, c.width, c.height);
+  // PNG keeps plan lines crisp; fall back to JPEG if it's too big.
+  let blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/png"));
+  if (!blob || blob.size > 4.5 * 1024 * 1024) blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.92));
+  if (!blob) throw new Error("Couldn't prepare that plan image.");
+  return { file: new File([blob], blob.type === "image/png" ? "plan.png" : "plan.jpg", { type: blob.type }), width: c.width, height: c.height };
 }
 
 export function FloorPlanRenderForm({ projectId, rooms }: { projectId: string; rooms: string[] }) {
@@ -56,10 +76,18 @@ export function FloorPlanRenderForm({ projectId, rooms }: { projectId: string; r
     start(async () => {
       const f = fileRef.current?.files?.[0];
       if (!f) return setError("Choose the floor plan first.");
-      form.set("plan", await prepare(f));
+      let prepared: Awaited<ReturnType<typeof prepare>>;
+      try {
+        prepared = await prepare(f);
+      } catch (e) {
+        return setError((e as Error).message);
+      }
+      form.set("plan", prepared.file);
+      form.set("width", String(prepared.width));
+      form.set("height", String(prepared.height));
       const res = await createHomeFromPlan(undefined, form);
       if (res?.error) return setError(res.error);
-      if (res?.id) router.push(`/projects/${projectId}/designs/${res.id}/3d?new=1`);
+      if (res?.id) router.push(`/projects/${projectId}/designs/${res.id}/plan?new=1`);
     });
   };
 
@@ -138,13 +166,13 @@ export function FloorPlanRenderForm({ projectId, rooms }: { projectId: string; r
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button className="btn-primary" disabled={pending}>
-            {pending ? STEPS[Math.min(STEPS.length - 1, Math.floor(secs / 7))] : "Build 3D home"}
+            {pending ? STEPS[Math.min(STEPS.length - 1, Math.floor(secs / 12))] : "Read plan"}
           </button>
-          <span className="text-xs text-muted">{pending ? `${secs}s` : "About 20–40 seconds · opens a walk-through"}</span>
+          <span className="text-xs text-muted">{pending ? `${secs}s` : "About 30–90 seconds · then you check the walls before 3D"}</span>
         </div>
         {pending && (
           <div className="h-1.5 overflow-hidden rounded-full bg-line">
-            <div className="h-full rounded-full bg-brass transition-all duration-1000" style={{ width: `${Math.min(95, secs * 2.6)}%` }} />
+            <div className="h-full rounded-full bg-brass transition-all duration-1000" style={{ width: `${Math.min(95, secs * 1.3)}%` }} />
           </div>
         )}
         {error && <p className="text-sm text-clay">{error}</p>}

@@ -7,9 +7,18 @@ import Link from "next/link";
 import { deleteDesign, shareDesign, unshareDesign } from "../../design-actions";
 import { DesignUploadForm } from "./upload-form";
 import { FloorPlanRenderForm } from "./render-form";
+import { normaliseScene } from "@/lib/home-scene";
 
-// Reading a floor plan with Claude takes 20–40 s.
-export const maxDuration = 60;
+const normaliseSafe = (s: unknown) => {
+  try {
+    return normaliseScene(s);
+  } catch {
+    return null;
+  }
+};
+
+// Reading a detailed floor plan with Claude can take a minute or two.
+export const maxDuration = 300;
 
 export default async function DesignsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -74,8 +83,13 @@ export default async function DesignsPage({ params }: { params: Promise<{ id: st
                       <Link href={`/projects/${project.id}/designs/${latest.id}/3d`} className="btn-brass inline-flex px-3 py-1.5 text-xs">
                         Open in 3D →
                       </Link>
+                      {edit && (
+                        <Link href={`/projects/${project.id}/designs/${latest.id}/plan`} className="btn-ghost inline-flex px-3 py-1.5 text-xs">
+                          Check plan
+                        </Link>
+                      )}
                       <span className="text-xs text-muted">
-                        {latest.scene.rooms.length} spaces · {latest.render?.interiorStyle ?? "modern"}
+                        {normaliseSafe(latest.scene)?.rooms.length ?? 0} spaces · {latest.render?.interiorStyle ?? "modern"}
                         {latest.render?.planUrl && (
                           <>
                             {" · "}

@@ -1,4 +1,8 @@
-import type { HomeScene, Opening, SceneRoom } from "@/lib/home-scene";
+import { axisOf, axisOpenings, type AxisOpening, type HomeScene, type SceneRoom, type Wall } from "@/lib/home-scene";
+
+type Opening = AxisOpening;
+/** Furniture stands this far in from a wall's centre line (half an inside wall). */
+const INSET = 0.07;
 
 /**
  * Places furniture in each room from its type, size, doors and windows.
@@ -65,8 +69,37 @@ class RoomPlanner {
     public name: string,
     private doors: Opening[],
     private windows: Opening[],
-    private openSides: Side[] = [],
+    private walls: Wall[] = [],
   ) {}
+
+  /** Stretches of side s that have a wall behind them (tall pieces need a full-height wall). */
+  covered(s: Side, tall: boolean): [number, number][] {
+    const { x, y, w, d } = this.r;
+    const horiz = s === "top" || s === "bottom";
+    const line = s === "top" ? y : s === "bottom" ? y + d : s === "left" ? x : x + w;
+    const from = horiz ? x : y,
+      to = horiz ? x + w : y + d;
+    const out: [number, number][] = [];
+    for (const wl of this.walls) {
+      if (tall && wl.kind !== "full") continue;
+      const ax = axisOf(wl);
+      if (ax !== (horiz ? "h" : "v")) continue;
+      const at = horiz ? (wl.a[1] + wl.b[1]) / 2 : (wl.a[0] + wl.b[0]) / 2;
+      if (Math.abs(at - line) > Math.max(0.3, wl.t / 2 + 0.15)) continue;
+      const p = horiz ? [wl.a[0], wl.b[0]] : [wl.a[1], wl.b[1]];
+      const a = Math.max(Math.min(p[0], p[1]), from),
+        b = Math.min(Math.max(p[0], p[1]), to);
+      if (b - a > 0.05) out.push([a - from, b - from]);
+    }
+    out.sort((p, q) => p[0] - q[0]);
+    const merged: [number, number][] = [];
+    for (const iv of out) {
+      const last = merged[merged.length - 1];
+      if (last && iv[0] <= last[1] + 0.08) last[1] = Math.max(last[1], iv[1]);
+      else merged.push([...iv]);
+    }
+    return merged;
+  }
 
   len(s: Side) {
     return s === "top" || s === "bottom" ? this.r.w : this.r.d;
@@ -77,7 +110,7 @@ class RoomPlanner {
   }
   private onSide(o: Opening, s: Side) {
     const { x, y, w, d } = this.r;
-    const e = 0.06;
+    const e = 0.35;
     if (s === "top" && o.dir === "h" && Math.abs(o.y - y) < e && o.x > x - 0.01 && o.x < x + w + 0.01) return o.x - x;
     if (s === "bottom" && o.dir === "h" && Math.abs(o.y - (y + d)) < e && o.x > x - 0.01 && o.x < x + w + 0.01) return o.x - x;
     if (s === "left" && o.dir === "v" && Math.abs(o.x - x) < e && o.y > y - 0.01 && o.y < y + d + 0.01) return o.y - y;
@@ -102,10 +135,11 @@ class RoomPlanner {
 
   /** Free stretches along a side, avoiding doors (and windows for tall pieces), and corners next to doors. */
   spans(s: Side, tall: boolean, itemDepth: number, off = 0): [number, number][] {
-    if (this.openSides.includes(s) && off < 0.9) return [];
     const L = this.len(s);
     // A piece standing well clear of the wall (a floating sofa) only needs to avoid the door swing.
     const floating = off >= 0.95;
+    const base: [number, number][] = floating ? [[0, L]] : this.covered(s, tall);
+    if (!base.length) return [];
     const blocked: [number, number][] = floating ? [] : this.doorsOn(s).map(({ t, w }) => [t - w / 2 - 0.12, t + w / 2 + 0.12]);
     if (tall) for (const { t, w } of this.windowsOn(s)) blocked.push([t - w / 2 - 0.05, t + w / 2 + 0.05]);
     // A door on a neighbouring wall close to this corner needs swing room.
@@ -119,12 +153,16 @@ class RoomPlanner {
     if (!floating && nearStart(b)) blocked.push([L - 0.95, L]);
     blocked.sort((p, q) => p[0] - q[0]);
     const out: [number, number][] = [];
-    let cur = 0.02;
-    for (const [p, q] of blocked) {
-      if (p > cur) out.push([cur, Math.min(p, L - 0.02)]);
-      cur = Math.max(cur, q);
+    for (const [bs, be] of base) {
+      let cur = Math.max(bs, 0) + INSET;
+      const end = Math.min(be, L) - INSET;
+      for (const [p, q] of blocked) {
+        if (q <= cur || p >= end) continue;
+        if (p > cur) out.push([cur, p]);
+        cur = Math.max(cur, q);
+      }
+      if (cur < end) out.push([cur, end]);
     }
-    if (cur < L - 0.02) out.push([cur, L - 0.02]);
     return out.filter(([p, q]) => q - p > 0.3);
   }
   bestSpan(s: Side, tall: boolean, itemDepth: number) {
@@ -134,7 +172,7 @@ class RoomPlanner {
   /** Plan position of a piece against side s, centred at distance t along it, `off` metres away from the wall. */
   at(s: Side, t: number, w: number, d: number, off = 0) {
     const { x, y } = this.r;
-    const k = off + d / 2;
+    const k = INSET + off + d / 2;
     if (s === "top") return { x: x + t, y: y + k };
     if (s === "bottom") return { x: x + t, y: y + this.r.d - k };
     if (s === "left") return { x: x + k, y: y + t };
@@ -148,7 +186,8 @@ class RoomPlanner {
   }
   fits(b: Box) {
     const { x, y, w, d } = this.r;
-    if (b.x1 < x - 0.01 || b.y1 < y - 0.01 || b.x2 > x + w + 0.01 || b.y2 > y + d + 0.01) return false;
+    const m = INSET - 0.02;
+    if (b.x1 < x + m || b.y1 < y + m || b.x2 > x + w - m || b.y2 > y + d - m) return false;
     return !this.placed.some((p) => b.x1 < p.x2 - 0.02 && b.x2 > p.x1 + 0.02 && b.y1 < p.y2 - 0.02 && b.y2 > p.y1 + 0.02);
   }
   add(kind: Kind, cx: number, cy: number, w: number, d: number, rot: number, opts?: Item["opts"], solid = true) {
@@ -194,7 +233,7 @@ class RoomPlanner {
   }
   corner(kind: Kind, size: number, avoid: Side[] = []) {
     const { x, y, w, d } = this.r;
-    const m = size / 2 + 0.08;
+    const m = size / 2 + 0.08 + INSET;
     const corners: [number, number, Side, Side][] = [
       [x + m, y + m, "top", "left"],
       [x + w - m, y + m, "top", "right"],
@@ -214,7 +253,6 @@ class RoomPlanner {
   /** Side scores: long free stretches, no doors, fewer windows. */
   rank(tall: boolean, need = 0) {
     return [...SIDES]
-      .filter((s) => !this.openSides.includes(s))
       .map((s) => {
         const sp = this.bestSpan(s, tall, 0.6);
         const len = sp ? sp[1] - sp[0] : 0;
@@ -300,11 +338,23 @@ function living(P: RoomPlanner) {
   const sofaOpts = { l: sofaW > 2.3 && P.len(o) > 3.6 };
   let sofa = P.wall("sofa", o, sofaW, 0.95, { t: along, off: sofaOff, minW: 1.6, opts: sofaOpts });
   // Wall blocked by a door or opening: float the sofa about 2.8 m from the TV, facing it.
+  // Open-plan rooms: keep it inside the room, and try smaller sofas.
+  const fx = Math.sin(tv.rot),
+    fy = Math.cos(tv.rot);
+  const { x: rx, y: ry, w: rw, d: rd } = P.r;
+  let floated = false;
   for (const dist of [2.9, 2.6, 2.3]) {
     if (sofa || span < dist + 0.6) break;
-    const fx = Math.sin(tv.rot),
-      fy = Math.cos(tv.rot);
-    sofa = P.free("sofa", tv.x + fx * (0.21 + dist), tv.y + fy * (0.21 + dist), sofaW, 0.95, tv.rot + Math.PI, { l: false });
+    for (const sw of [sofaW, 2.2, 1.9, 1.6]) {
+      if (sofa || sw > sofaW) continue;
+      let cx = tv.x + fx * (0.21 + dist),
+        cy = tv.y + fy * (0.21 + dist);
+      const m = INSET + sw / 2 + 0.05;
+      if (Math.abs(fx) > 0.5) cy = Math.min(Math.max(cy, ry + m), ry + rd - m); // sofa runs along y
+      else cx = Math.min(Math.max(cx, rx + m), rx + rw - m);
+      sofa = P.free("sofa", cx, cy, sw, 0.95, tv.rot + Math.PI, { l: false });
+      if (sofa) floated = true;
+    }
   }
   if (sofa) {
     const mx = (tv.x + sofa.x) / 2,
@@ -321,7 +371,7 @@ function living(P: RoomPlanner) {
       ly = sofa.y - Math.sin(sofa.rot) * (sofaW / 2 + 0.3);
     P.free("floor_lamp", lx, ly, 0.35, 0.35, 0);
     const back = P.at(o, o === "top" || o === "bottom" ? sofa.x - P.r.x : sofa.y - P.r.y, 0, 0.02, 0);
-    if (!sofaOff) P.add("art", back.x, back.y, Math.min(1.4, sofaW * 0.6), 0.03, ROT[o], { h: 0.8, base: 1.45 }, false);
+    if (!sofaOff && !floated) P.add("art", back.x, back.y, Math.min(1.4, sofaW * 0.6), 0.03, ROT[o], { h: 0.8, base: 1.45 }, false);
   }
   P.corner("plant", 0.5);
   P.corner("plant", 0.45);
@@ -476,9 +526,11 @@ export function furnish(scene: HomeScene): Item[] {
     const b = biggest.get(r.name);
     if (!b || r.w * r.d > b.w * b.d) biggest.set(r.name, r);
   }
+  const { doors, windows } = axisOpenings(scene);
   for (const room of biggest.values()) {
-    const run = (rect: Rect, open: Side[], fn: (P: RoomPlanner) => void) => {
-      const P = new RoomPlanner(rect, room.name, scene.doors, scene.windows, open);
+    // Open sides (no wall drawn) get no furniture against them.
+    const run = (rect: Rect, _open: Side[], fn: (P: RoomPlanner) => void) => {
+      const P = new RoomPlanner(rect, room.name, doors, windows, scene.walls);
       try {
         fn(P);
       } catch {}
@@ -509,7 +561,7 @@ export function furnish(scene: HomeScene): Item[] {
           run(r, [], living);
           break;
         }
-        const s = splitLivingDining(room, scene.windows);
+        const s = splitLivingDining(room, windows);
         run(s.live, [s.liveOpen], living);
         run(s.dine, [s.dineOpen], dining);
         break;

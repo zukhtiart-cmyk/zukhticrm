@@ -187,17 +187,22 @@ How it behaves:
 
 ## Floor plan → 3D home (Designs tab)
 
-Each project's **Designs** tab has a **Floor plan → 3D home** panel. No outside 3D service: Claude reads the plan, and the CRM builds the home in 3D in the browser.
+Each project's **Designs** tab has a **Floor plan → 3D home** panel. No outside 3D service: Claude traces the plan, you check it, and the CRM builds the home in 3D in the browser.
 
-1. Upload the floor plan (JPG, PNG, WebP or PDF) and pick an interior style (Modern, Luxury, Japandi, Minimalist, Scandinavian, Traditional, Industrial, Coastal). Add a note if something on the plan is unclear.
-2. **Build 3D home** (about 20–40 seconds). Claude reads the rooms, sizes, doors and windows; the CRM lays out walls and furnishes each room for its use (beds, wardrobes, sofa and TV wall, dining set, kitchen counters, bathroom fittings, puja unit and more).
-3. The 3D viewer opens:
-   - **Dollhouse** — spin and zoom around the whole home; switch between cut and full-height walls. Tap a room name to walk into it.
-   - **Walk through** — first person. Computer: drag to look, W A S D or arrow keys to move. Phone: joystick to move, drag to look. Room buttons jump between rooms.
-   - Change the style live and **Save the look** while the design is still a draft.
-4. The picture is saved as a draft design version. **Share with client** as usual: they approve it in the portal and can walk through it too.
+1. **Read plan.** Upload the floor plan (JPG, PNG, WebP or PDF — the first PDF page is used) and pick an interior style. Claude traces every wall (full, half, glass partition, balcony railing), each door, archway, sliding door and window, the room names, and the scale from a labelled dimension. Takes about 30–90 seconds.
+2. **Check plan.** Your plan shows behind Claude's tracing. The CRM first lines the walls up with the dark wall lines in the picture (and measures their thickness). Then fix anything wrong:
+   - **Select** a wall → change it to full / half / glass / railing, **Remove wall (make it open)** for open areas, split it, or type its length and thickness. Drag a wall or its end dots to move them.
+   - **Wall** draws new walls (clicks snap to wall ends and stay straight). **Door / Window / Archway / Sliding** add openings by clicking on a wall; drag them along the wall; tick **Main entrance** on the front door.
+   - **Room** marks a room's floor; name it and set its type (the type decides the furniture).
+   - **Scale** — click both ends of a dimension you know and type it (12'6", 3.8 m, 3800).
+   - Undo / redo, zoom, pan, and a slider to fade the plan picture.
+3. **Save & build 3D.** The 3D viewer opens:
+   - **Dollhouse** — spin and zoom around the whole home; cut or full-height walls. Tap a room name to walk into it.
+   - **Walk through** — first person. Computer: drag to look, W A S D or arrow keys. Phone: joystick + drag.
+   - Change the style live and **Save the look** while it's a draft.
+4. **Share with client** as usual; they can walk through it in the portal. **Edit plan** is always available: editing a design that's already with the client saves a new draft version.
 
-Uses `ANTHROPIC_API_KEY` (already set for Zuki). Optional: `ANTHROPIC_PLAN_MODEL` to pick a different Claude model for plan reading. It's a 3D model, not a photoreal render: room sizes come from the plan, furniture is placed automatically.
+Uses `ANTHROPIC_API_KEY` (already set for Zuki). Optional: `ANTHROPIC_PLAN_MODEL` to choose the Claude model for plan reading. It's a concept 3D model, not a photoreal render; furniture is placed automatically against real walls (open sides are left open).
 
 ## Set up and deploy on Vercel
 
